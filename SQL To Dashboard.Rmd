@@ -1,0 +1,124 @@
+---
+title: "SQL to Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(DBI)
+library(ODBC)  
+library(tidyverse)
+library(flexdashboard)
+
+# Establish a connection to the database
+con <- dbConnect(odbc::odbc(), 
+  dsn = 'SANDPIT',
+  TrustedConnection = TRUE
+)
+
+dbListTables(con)
+```
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Pulling in data from the Sandpit
+
+```{r}
+# Pull data from SQL
+Dataset_R <- dbFetch(dbSendQuery(con,
+                                   "SELECT * FROM MyTable_in_SQL"))
+# Display first few rows
+head(data)
+
+# Tips for fetching data
+# Remove any unnecessary columns
+# Probably faster to perform aggregation directly in the query
+# Might be useful to create a view in Sandpit and query that if the query is too complex
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Line Graph
+
+```{r}
+# Generalized line graph
+renderLineGraph <- function(data, x_col, y_col, group_col = NULL) {
+  ggplot(data, aes_string(x = x_col, y = y_col, color = group_col)) +
+    geom_line() +
+    theme_minimal() +
+    labs(title = paste("Line Graph of", y_col, "over", x_col))
+}
+
+# Example usage
+renderLineGraph(data, "your_x_column", "your_y_column", "your_group_column")
+
+```
+
+### Histogram
+
+```{r}
+# Generalized histogram
+renderHistogram <- function(data, col) {
+  ggplot(data, aes_string(x = col)) +
+    geom_histogram(binwidth = 10, fill = "blue", color = "black") +
+    theme_minimal() +
+    labs(title = paste("Histogram of", col))
+}
+
+# Example usage
+renderHistogram(data, "your_column")
+
+```
+
+
+### Histogram with line
+
+```{r}
+# Generalized histogram with density line
+renderHistogramWithLine <- function(data, col) {
+  ggplot(data, aes_string(x = col)) +
+    geom_histogram(aes(y = ..density..), binwidth = 10, fill = "blue", color = "black") +
+    geom_density(color = "red", size = 1) +
+    theme_minimal() +
+    labs(title = paste("Histogram and Density of", col))
+}
+
+# Example usage
+renderHistogramWithLine(data, "your_column")
+
+```
+
+### Pie Chart
+
+```{r}
+
+# Generalized pie chart
+renderPieChart <- function(data, col) {
+  pie_data <- data %>%
+    count(!!sym(col)) %>%
+    mutate(percentage = n / sum(n) * 100)
+  
+  ggplot(pie_data, aes(x = "", y = percentage, fill = !!sym(col))) +
+    geom_bar(stat = "identity", width = 1) +
+    coord_polar(theta = "y") +
+    theme_void() +
+    labs(title = paste("Pie Chart of", col))
+}
+
+# Example usage
+renderPieChart(data, "your_column")
+
+```
+ 
+ 
+### Closing the connection
+
+```{r}
+# Close the database connection
+dbDisconnect(con)
+
+```
