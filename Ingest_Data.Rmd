@@ -1,0 +1,86 @@
+---
+title: "Data_Ingest"
+author: "Arush Mohan"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readxl)
+library(tidyverse)
+library(lubridate)
+library(flexdashboard)
+
+```
+
+## Row Skip Rules
+
+```{r}
+# Load row-skipping rules from CSV file
+skip_rules <- read.csv("src/Row_skip_rules.csv")
+
+# Print the skip rules for verification
+skip_rules
+```
+
+## Reading data and changing to Long format
+
+
+```{r}
+# Function to read and process each Excel file
+process_excel_file <- function(file_path, skip_rows) {
+  data <- read_excel(file_path, skip = skip_rows)
+  
+  # Convert data to long format
+  data_long <- data %>%
+    pivot_longer(
+      cols = -c(1:5), # will have to adjust this based on the number of non-variable columns?
+      names_to = "variable",
+      values_to = "value"
+    )
+  
+  return(data_long)
+}
+
+# Directory containing the Excel files
+data_dir <- "data/2003-11-12/"
+
+# list of Excel files to process
+excel_files <- list.files(data_dir, pattern = "*.xlsx")
+
+# Initialize an empty list to store the data
+all_data <- list()
+
+# Loop through each Excel file and process it
+for (file in excel_files) {
+  # Extract provider name from the file name
+  provider <- sub("_weeklydata_.*", "", file)
+  
+  # Get the number of rows to skip for this provider from the rules
+  skip_rows <- skip_rules %>%
+    filter(provider == provider) %>%
+    pull(skip_rows)
+  
+  # Full file path
+  file_path <- file.path(data_dir, file)
+  
+  # Process the Excel file
+  processed_data <- process_excel_file(file_path, skip_rows)
+  
+  # Add the provider name to the processed data
+  processed_data <- processed_data %>%
+    mutate(provider = provider)
+  
+  # Append to the list
+  all_data[[file]] <- processed_data
+}
+
+# Combine all processed data into a single data frame
+final_data <- bind_rows(all_data)
+
+# Print the first few rows of the final data for verification
+head(final_data)
+
+``
