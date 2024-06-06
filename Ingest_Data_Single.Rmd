@@ -1,0 +1,65 @@
+---
+title: "Data_Ingest"
+author: "Arush Mohan"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readxl)
+library(tidyverse)
+library(lubridate)
+library(flexdashboard)
+
+```
+
+## Reading in the data
+
+```{r}
+
+# Define the file path
+file_path <- "data/2003-11-12/MEH_weeklydata_19-11-2023.xlsx"
+
+
+
+# Read the file while skipping the first 18 rows
+MEH_weeklydata <- read_excel(file_path, 
+    col_names = FALSE, skip = 18)
+
+
+# Extract the provider name from the file name
+file_name <- basename(file_path)
+provider_name <- str_extract(file_name, "^[^_]+")
+
+
+
+head(MEH_weeklydata)
+```
+
+## Pivoting Data from Wide to Long
+```{r}
+
+# Assign Column names 
+x <- c('Speciality',	'Diagnostic waiting list-With a TCI',	'Diagnostic waiting list-Without a TCI ',	'Diagnostic waiting list-Total',	'Waiting list',	'Planned',	'Unscheduled ',	'DM01-Total',	'DNA',	'Patient Cancelled',	'Patient Declined/Refused',	'Total DNA',	'Wait List-0<01 weeks',	'Wait List-01<02 weeks',	'Wait List-02<03 weeks',	'Wait List-03<04 weeks',	'Wait List-04<05 weeks',	'Wait List-05<06 weeks')
+
+# Adding column names to the data
+colnames(MEH_weeklydata) <- x
+
+
+# Pivoting data from wide to long format
+long_data <- MEH_weeklydata %>% 
+  pivot_longer(
+    cols = `Diagnostic waiting list-With a TCI`:`Wait List-05<06 weeks`,
+    names_to = "Variable" ,
+    values_to = "Values"
+  )
+
+# Adding the provider name from the file name
+long_data <- long_data %>%
+  mutate(ProviderName = provider_name)
+
+
+head(long_data)
+```
