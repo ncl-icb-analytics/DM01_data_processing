@@ -1,0 +1,173 @@
+---
+title: "Data_Ingest"
+author: "Arush Mohan"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readxl)
+library(tidyverse)
+library(lubridate)
+library(flexdashboard)
+
+```
+
+
+
+## Reading in the data
+
+
+```{r}
+
+# Define the directory containing the Excel files
+dir_path <- "data/2023_01_15/"
+
+# List all Excel files in the directory
+file_list <- list.files(path = dir_path, pattern = "*.xlsx", full.names = TRUE)
+
+```
+
+
+## Defining columns and sheet rules
+
+``` {r}
+# Define the column names
+x <- c('Speciality', 'Diagnostic waiting list-With a TCI', 'Diagnostic waiting list-Without a TCI', 'Diagnostic waiting list-Total', 'Waiting list', 'Planned', 'Unscheduled', 'DM01-Total', 'Wait List-0<01 weeks', 'Wait List-01<02 weeks', 'Wait List-02<03 weeks', 'Wait List-03<04 weeks', 'Wait List-04<05 weeks', 'Wait List-05<06 weeks')
+
+# Define a named vector for sheet name rules based on provider name prefixes
+sheet_name_rules <- c(
+  MEH = "Diagnostics",
+  InHealth = "NCL Imaging Data",
+  NMUH = "Diagnostics",
+  RFL = "Diagnostics",
+  UCLH = "Diagnostics",
+  RNOH = "Diagnostics",
+  WH = "Diagnostics",
+  GOSH ="Diagnostics"
+)
+
+
+```
+
+
+
+## Data processing functions
+
+```{r}
+
+# Function to get the sheet name based on provider name
+get_sheet_name <- function(provider_name) {
+  sheet_name_rules[provider_name]
+}
+  
+extract_date <- function(file_name) {
+  date_str <- str_extract(file_name, "\\d{6}$|\\d{2}-\\d{2}-\\d{4}|\\d{2}\\.\\d{2}\\.\\d{2}|\\d{8}|\\d{4}-\\d{2}-\\d{2}")
+  
+  if (!is.na(date_str)) {
+    if (str_detect(date_str, "^\\d{6}$")) {
+      # Date format without separators, e.g., 230115
+      return(as.Date(date_str, format = "%y%m%d"))
+    } else if (str_detect(date_str, "^\\d{2}-\\d{2}-\\d{4}$")) {
+      # Date format with dashes, e.g., 01-01-2023
+      return(as.Date(date_str, format = "%d-%m-%Y"))
+    } else if (str_detect(date_str, "^\\d{2}\\.\\d{2}\\.\\d{2}$")) {
+      # Date format with dots, e.g., 23.01.08
+      return(as.Date(date_str, format = "%y.%m.%d"))
+    } else if (str_detect(date_str, "^\\d{8}$")) {
+      # Date format without separators, e.g., 20230108
+      return(as.Date(date_str, format = "%Y%m%d"))
+    } else if (str_detect(date_str, "^\\d{4}-\\d{2}-\\d{2}$")) {
+      # Date format with dashes, e.g., 2023-01-08
+      return(as.Date(date_str, format = "%Y-%m-%d"))
+    }
+  }
+  
+  return(NA)
+}
+
+# Function to process each file
+process_file <- function(file_path) {
+  # Extract the file name and provider name from the file name
+  file_name <- basename(file_path)
+  provider_name <- str_extract(file_name, "^[^_]+")
+  
+  print(provider_name)
+  
+  # Extract the date from the file name
+  report_date <- extract_date(file_name)
+  
+  if (is.na(report_date)) {
+    warning("Date extraction failed for file: ", file_name)
+    return(NULL)
+  }
+  
+  # Get the sheet name based on the provider name
+  sheet_name <- get_sheet_name(provider_name)
+  
+  # Read the specified sheet, skipping non-tabular rows
+  weekly_data <- tryCatch(
+    read_excel(file_path, sheet = sheet_name, col_names = FALSE, skip = 19, range = 'D20:Q40'),
+    error = function(e) {
+      warning("Failed to read sheet for file: ", file_name)
+      return(NULL)
+    }
+  )
+  
+  #check if the data is read in correctly
+  if (is.null(weekly_data) || nrow(weekly_data) == 0) {
+    warning("No data found in ", file_path)
+    return(NULL)
+  }
+  
+  # Check if the number of columns matches the expected number
+  if (ncol(weekly_data) != length(x)) {
+    warning("Column mismatch in file: ", file_name)
+    return(NULL)
+  }
+  
+  # Assign column names
+  colnames(weekly_data) <- x
+  
+  # Add the provider name and report date as new columns
+  weekly_data %>%
+    mutate(ProviderName = provider_name, ReportDate = report_date)
+}
+
+```
+
+
+## Combining the datasets
+
+```{r}
+# Read and combine all files into one data frame
+combined_data <- map_dfr(file_list, process_file)
+
+# Print the first few rows of the combined data for verification
+print(head(combined_data))
+
+```
+
+
+
+## Pivoting the data
+
+```{r}
+
+# Pivot the combined data from wide to long format for all relevant columns
+Long_data <- combined_data %>%
+  pivot_longer(
+    cols = x[-1], # Exclude 'Speciality' since it is not a value column
+    names_to = "Description",
+    values_to = "Activity"
+  )
+  
+
+  
+# Print the first few rows of the combined data
+head(Long_data)
+
+
+```
