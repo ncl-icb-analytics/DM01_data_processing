@@ -1,0 +1,112 @@
+---
+title: "Graphing Functions"
+author: "Arush Mohan"
+date: "`r Sys.Date()`"
+output: powerpoint_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(tidyverse)
+library(readxl)
+
+```
+
+## Loading in the consolidated file for sample
+```{r, include=FALSE}
+column_names <- read_excel("data/Diagnostics_Consolidated Data File v8.xlsx", 
+    sheet = "Data", n_max = 1, col_names = TRUE)
+
+Consolidated_data <- read_excel("data/Diagnostics_Consolidated Data File v8.xlsx", 
+    sheet = "Data", skip = 20000, col_names = FALSE, col_types = c("text", 
+        "text", "date", "text", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric"))
+
+colnames(Consolidated_data) <- colnames(column_names)
+
+# Remove the column 'Weeknumber'
+Consolidated_data <- Consolidated_data %>% select(-WeekNumber)
+
+```
+
+## Pivoting data
+
+```{r}
+
+# Pivot the combined data from wide to long format for all relevant columns
+long_data <- Consolidated_data %>%
+  pivot_longer(
+    cols = -c(Provider, Speciality, Date), # Exclude the first three columns
+    names_to = "Description",
+    values_to = "Activity"
+  )
+  
+
+
+
+```
+
+## Filtering data for aggregate views
+
+```{r}
+
+long_data <- long_data %>%
+  mutate(Activity = ifelse(is.na(Activity), NA, Activity))
+
+# Ensure the Date column is of Date type
+long_data$Date <- as.Date(long_data$Date)
+
+# Filter the data for 'Diagnostic waiting list-Total'
+filtered_data <- long_data %>%
+  filter(Description == 'Diagnostic waiting list-Total' & !is.na(Activity) | is.na(Activity)) %>% 
+  select(-Speciality) %>% 
+  group_by(Provider, Date) %>%
+  summarise(Activity = sum(Activity, na.rm = TRUE))
+
+# Ensure the filtered data is sorted by Provider and Date
+filtered_data <- filtered_data %>%
+  arrange(Provider, Date)
+
+```
+
+
+## Line graph of Providers over time
+```{r}
+# Create the line plot with individual dates and a gap of 1 week
+ggplot(filtered_data, aes(x = Date, y = Activity, color = Provider, group = Provider)) +
+  geom_line(na.rm = TRUE) +    # Removes NA values for line plot
+  geom_point(na.rm = TRUE) +   # Removes NA values for points
+  scale_x_date(date_breaks = "1 week", date_labels = "%d-%m-%Y") +
+  scale_y_continuous(breaks = seq(0, max(filtered_data$Activity + 500), by = 500)) +# Set date breaks to 1 week
+  labs(
+    title = "Diagnostic 6+ Week Wait by Provider",
+    x = "Date",
+    y = "Diagnostic Waiting List Total"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for better readability
+```
+
+## Stacked Barchart
+
+```{r pressure}
+
+ggplot(filtered_data, aes(fill = Provider, y = Activity, x = Date)) + 
+  geom_bar(position="stack", stat="identity") +
+  scale_x_date(date_breaks = "1 week", date_labels = "%d-%m-%Y") +
+  scale_y_continuous(breaks = seq(0, max(filtered_data$Activity + 1000), by = 1000)) +
+  labs(
+    title = "Diagnostic 6+ Week Wait by Provider",
+    x = "Date",
+    y = "Diagnostic Waiting List Total"
+  ) +
+  theme_minimal()
+
+```
+
