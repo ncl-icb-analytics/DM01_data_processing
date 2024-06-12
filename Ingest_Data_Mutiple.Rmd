@@ -23,7 +23,7 @@ library(flexdashboard)
 ```{r}
 
 # Define the directory containing the Excel files
-dir_path <- "data/2023_01_15/"
+dir_path <- "data/2024-06-02/"
 
 # List all Excel files in the directory
 file_list <- list.files(path = dir_path, pattern = "*.xlsx", full.names = TRUE)

@@ -67,7 +67,8 @@ filtered_data <- long_data %>%
   filter(Description == 'Diagnostic waiting list-Total' & !is.na(Activity) | is.na(Activity)) %>% 
   select(-Speciality) %>% 
   group_by(Provider, Date) %>%
-  summarise(Activity = sum(Activity, na.rm = TRUE))
+  summarise(Activity = sum(Activity, na.rm = TRUE))%>%
+  ungroup()
 
 # Ensure the filtered data is sorted by Provider and Date
 filtered_data <- filtered_data %>%
@@ -76,12 +77,14 @@ filtered_data <- filtered_data %>%
 ```
 
 
+
+
 ## Line graph of Providers over time
 ```{r}
 # Create the line plot with individual dates and a gap of 1 week
 ggplot(filtered_data, aes(x = Date, y = Activity, color = Provider, group = Provider)) +
-  geom_line(na.rm = TRUE) +    # Removes NA values for line plot
-  geom_point(na.rm = TRUE) +   # Removes NA values for points
+  geom_line()+#na.rm = TRUE) +    # Removes NA values for line plot
+  geom_point()+#+na.rm = TRUE) +   # Removes NA values for points
   scale_x_date(date_breaks = "1 week", date_labels = "%d-%m-%Y") +
   scale_y_continuous(breaks = seq(0, max(filtered_data$Activity + 500), by = 500)) +# Set date breaks to 1 week
   labs(
@@ -110,3 +113,46 @@ ggplot(filtered_data, aes(fill = Provider, y = Activity, x = Date)) +
 
 ```
 
+
+```{r}
+
+matrix_data <- as.matrix(filtered_data)
+
+heatmap(matrix_data, Rowv = Provider, Colv = Activity)
+
+```
+
+
+
+## Filtering data for each speciality
+```{r}
+
+dexa_data <- long_data %>% 
+  filter(Speciality == 'DEXA Scan') %>% 
+  group_by(Provider, Date) %>% 
+  summarise(Activity = sum(Activity, na.rm = TRUE))
+
+```
+
+```{r}
+
+start_time <- as.Date("2024-04-01")
+endtime <- as.Date("2024-06-01")
+
+# create a start and end time R object
+start.end <- c(start_time,endtime)
+start.end
+
+ggplot(dexa_data, aes(y = Activity, x = Date, color = Provider)) +
+  geom_line(na.rm = TRUE) +
+  geom_point(na.rm = TRUE) +
+  scale_x_date(limits = start.end, date_breaks = "1 week", date_labels = "%d-%m-%Y") +
+  labs(
+    title = "Diagnosic 6+ week waits by provider",
+    x = "Date"
+  ) +
+  facet_wrap(~ Provider, scales = "free_x") +
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+```
