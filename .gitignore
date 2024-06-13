@@ -165,3 +165,5 @@ cython_debug/
 #Exempt Files
 
 !src/Row_skip_rules.csv
+!src/Sheet_name_rules.csv
+!src/Column_Names.csv

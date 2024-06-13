@@ -35,20 +35,16 @@ file_list <- list.files(path = dir_path, pattern = "*.xlsx", full.names = TRUE)
 
 ``` {r}
 # Define the column names
-x <- c('Speciality', 'Diagnostic waiting list-With a TCI', 'Diagnostic waiting list-Without a TCI', 'Diagnostic waiting list-Total', 'Waiting list', 'Planned', 'Unscheduled', 'DM01-Total', 'Wait List-0<01 weeks', 'Wait List-01<02 weeks', 'Wait List-02<03 weeks', 'Wait List-03<04 weeks', 'Wait List-04<05 weeks', 'Wait List-05<06 weeks')
+col_names_df <- read_csv("src/Column_Names.csv")
 
-# Define a named vector for sheet name rules based on provider name prefixes
-sheet_name_rules <- c(
-  MEH = "Diagnostics",
-  InHealth = "NCL Imaging Data",
-  NMUH = "Diagnostics",
-  RFL = "Diagnostics",
-  UCLH = "Diagnostics",
-  RNOH = "Diagnostics",
-  WH = "Diagnostics",
-  GOSH ="Diagnostics"
-)
+column_names <- col_names_df$Column_Names
 
+
+
+# Read sheet name rules from CSV
+sheet_names_df <- read_csv("src/Sheet_name_rules.csv")
+
+sheet_name_rules <- setNames(sheet_names_df$SheetName, sheet_names_df$Provider)
 
 ```
 
@@ -109,7 +105,7 @@ process_file <- function(file_path) {
   
   # Read the specified sheet, skipping non-tabular rows
   weekly_data <- tryCatch(
-    read_excel(file_path, sheet = sheet_name, col_names = FALSE, skip = 19, range = 'D20:Q40'),
+    read_excel(file_path, sheet = sheet_name, col_names = FALSE, skip = 19, range = 'D20:S40'),
     error = function(e) {
       warning("Failed to read sheet for file: ", file_name)
       return(NULL)
