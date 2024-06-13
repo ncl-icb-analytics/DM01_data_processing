@@ -1,0 +1,9 @@
+Provider,SheetName,SkipRows,RangeStart,RangeEnd
+Inhealth,NCL Imaging Data,18,B19,S31
+MEH,Diagnostics,18,B20,S32
+NMUH ,Diagnostics,18,B21,S33
+RFL,Diagnostics,18,B22,S34
+UCLH,Diagnostics,18,B23,S35
+RNOH,Diagnostics,18,B24,S36
+WH,Diagnostics,18,B25,S37
+GOSH,Diagnostics,18,B26,S38

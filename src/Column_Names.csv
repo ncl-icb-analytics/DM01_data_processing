@@ -1,19 +1,19 @@
-Column_Names,
-Speciality,Speciality
-Diagnostic waiting list-With a TCI,Diagnostic_waiting_list_With_a_TCI
-Diagnostic waiting list-Without a TCI ,Diagnostic_waiting_list_Without_a_TCI_
-Diagnostic waiting list-Total,Diagnostic_waiting_list_Total
-Waiting list,Waiting_list
-Planned,Planned
-Unscheduled,Unscheduled
-DM01-Total,DM01_Total
-DNA,DNA
-Patient Cancelled,Patient_Cancelled
-Patient Declined/Refused,Patient_Declined/Refused
-Total DNA,Total_DNA
-Wait List-0<01 weeks,Wait_List_0<01_weeks
-Wait List-01<02 weeks,Wait_List_01<02_weeks
-Wait List-02<03 weeks,Wait_List_02<03_weeks
-Wait List-03<04 weeks,Wait_List_03<04_weeks
-Wait List-04<05 weeks,Wait_List_04<05_weeks
-Wait List-05<06 weeks,Wait_List_05<06_weeks
+Column_Names
+Speciality
+Diagnostic_waiting_list_With_a_TCI
+Diagnostic_waiting_list_Without_a_TCI
+Diagnostic_waiting_list_Total
+Waiting_list
+Planned
+Unscheduled
+DM01_Total
+DNA
+Patient_Cancelled
+Patient_Declined/Refused
+Total_DNA
+Wait_List_0<01_weeks
+Wait_List_01<02_weeks
+Wait_List_02<03_weeks
+Wait_List_03<04_weeks
+Wait_List_04<05_weeks
+Wait_List_05<06_weeks
