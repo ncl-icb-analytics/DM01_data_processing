@@ -1,0 +1,193 @@
+---
+title: "Ingest_Flex_Freeze"
+author: "Arush Mohan"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readxl)
+library(tidyverse)
+library(lubridate)
+library(flexdashboard)
+
+```
+
+
+
+## Defining folder directories
+
+```{r}
+
+# Define the directories containing the Excel files
+main_folder <- "data/2024-06-09/"
+dir_path_flex <- file.path(main_folder, "Flex")
+dir_path_freeze <- file.path(main_folder, "Freeze")
+
+```
+
+
+## Assigning dates based on folder names
+
+```{r}
+
+# Extract the date from the main folder name
+main_folder_date <- as.Date(basename(main_folder), format = "%Y-%m-%d")
+
+# Calculate the date for freeze files
+freeze_date <- main_folder_date - 7
+
+
+```
+
+
+## Reading in the files
+
+```{r}
+
+# List all Excel files in the directories
+file_list_flex <- list.files(path = dir_path_flex, pattern = "*.xlsx", full.names = TRUE)
+file_list_freeze <- list.files(path = dir_path_freeze, pattern = "*.xlsx", full.names = TRUE)
+
+```
+
+##Combining file lists and differentiating flex/freeze
+
+```{r}
+
+# Combine both file lists and add a DataType column
+file_list <- tibble(
+  file_path = c(file_list_flex, file_list_freeze),
+  DataType = c(rep("flex", length(file_list_flex)), rep("freeze", length(file_list_freeze))),
+  ReportDate = c(rep(main_folder_date, length(file_list_flex)), rep(freeze_date, length(file_list_freeze)))
+)
+
+```
+
+
+## Defining columns and sheet parameters
+
+``` {r}
+# Define the column names
+col_names_df <- read_csv("src/Column_Names.csv")
+
+column_names <- col_names_df$Column_Names
+
+
+# Read combined sheet parameters and sheet names from CSV
+sheet_parameters <- read_csv("src/Sheet_parameters.csv")
+
+```
+
+
+
+## Data processing function
+
+```{r}
+
+# Function to process each file
+process_file <- function(file_path, data_type, report_date) {
+  # Extract the file name from the file path
+  file_name <- basename(file_path)
+  # Extract the provider name from the file name
+  provider_name <- str_extract(file_name, "^[^_]+")
+  
+  print(provider_name)
+  
+  # Get the sheet parameters for the specific provider
+  provider_params <- sheet_parameters %>% filter(Provider == provider_name)
+  
+  # warning if no parameters are found
+  if (nrow(provider_params) == 0) {
+    warning("Sheet parameters not found for provider: ", provider_name)
+    return(NULL)
+  }
+  
+  # Extract the parameters for reading the Excel sheets
+  skip_rows <- provider_params$SkipRows
+  range_start <- provider_params$RangeStart
+  range_end <- provider_params$RangeEnd
+  sheet_name <- provider_params$SheetName
+  
+  # Read the specified sheet, skipping non-tabular rows
+  weekly_data <- tryCatch(
+    read_excel(file_path, sheet = sheet_name, col_names = FALSE, skip = skip_rows, range = paste0(range_start, ":", range_end)),
+    error = function(e) {
+      warning("Failed to read sheet for file: ", file_name)
+      return(NULL)
+    }
+  )
+  
+  if (is.null(weekly_data) || nrow(weekly_data) == 0) {
+    warning("No data found in ", file_path)
+    return(NULL)
+  }
+  
+  if (ncol(weekly_data) != length(column_names)) {
+    warning("Column mismatch in file: ", file_name)
+    return(NULL)
+  }
+  
+  # Assign column names to the data
+  colnames(weekly_data) <- column_names
+  
+  # Convert columns to numeric, keeping NAs (except the Speciality column)
+  weekly_data <- weekly_data %>%
+    mutate(across(.cols = -Speciality, .fns = ~ as.numeric(.)))
+  
+  # Add the provider name, report date, and data type as new columns
+  weekly_data %>%
+    mutate(ProviderName = provider_name, ReportDate = report_date, DataType = data_type)
+}
+
+
+```
+
+
+## Combining the datasets
+
+```{r}
+# Read and combine all files into one data frame
+combined_data <- file_list %>%
+  mutate(data = pmap(list(file_path, DataType, ReportDate), ~process_file(..1, ..2, ..3))) %>%
+  select(-file_path, -DataType, -ReportDate) %>%
+  filter(map_lgl(data, ~ !is.null(.x))) %>%
+  unnest(cols = c(data))
+
+```
+
+
+
+```{r}
+
+# Filter out rows with NA in Speciality column
+combined_data_formatted <- combined_data %>%
+  filter(!is.na(Speciality))
+
+# Print the first few rows of the combined data for verification
+print(head(combined_data))
+
+```
+
+
+
+## Pivoting the data
+```{r}
+
+# Pivot the combined data from wide to long format for all relevant columns
+Long_data <- combined_data_formatted %>%
+  pivot_longer(
+    cols = column_names[-1], # Exclude 'Speciality' since it is not a value column
+    names_to = "Description",
+    values_to = "Activity"
+  )
+  
+
+  
+# Print the first few rows of the combined data
+head(Long_data)
+
+
+```
