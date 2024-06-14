@@ -167,3 +167,5 @@ cython_debug/
 !src/Row_skip_rules.csv
 !src/Sheet_parameters.csv
 !src/Column_Names.csv
+!src/Provider_columns.csv
+!src/Provider_columns2.csv
