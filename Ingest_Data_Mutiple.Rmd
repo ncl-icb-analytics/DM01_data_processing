@@ -23,7 +23,7 @@ library(flexdashboard)
 ```{r}
 
 # Define the directory containing the Excel files
-dir_path <- "data/2024-06-02/"
+dir_path <- "data/2024-06-09/"
 
 # List all Excel files in the directory
 file_list <- list.files(path = dir_path, pattern = "*.xlsx", full.names = TRUE)
@@ -35,20 +35,13 @@ file_list <- list.files(path = dir_path, pattern = "*.xlsx", full.names = TRUE)
 
 ``` {r}
 # Define the column names
-x <- c('Speciality', 'Diagnostic waiting list-With a TCI', 'Diagnostic waiting list-Without a TCI', 'Diagnostic waiting list-Total', 'Waiting list', 'Planned', 'Unscheduled', 'DM01-Total', 'Wait List-0<01 weeks', 'Wait List-01<02 weeks', 'Wait List-02<03 weeks', 'Wait List-03<04 weeks', 'Wait List-04<05 weeks', 'Wait List-05<06 weeks')
+col_names_df <- read_csv("src/Column_Names.csv")
 
-# Define a named vector for sheet name rules based on provider name prefixes
-sheet_name_rules <- c(
-  MEH = "Diagnostics",
-  InHealth = "NCL Imaging Data",
-  NMUH = "Diagnostics",
-  RFL = "Diagnostics",
-  UCLH = "Diagnostics",
-  RNOH = "Diagnostics",
-  WH = "Diagnostics",
-  GOSH ="Diagnostics"
-)
+column_names <- col_names_df$Column_Names
 
+
+# Read combined sheet parameters and sheet names from CSV
+sheet_parameters <- read_csv("src/Sheet_parameters.csv")
 
 ```
 
@@ -58,9 +51,10 @@ sheet_name_rules <- c(
 
 ```{r}
 
+
 # Function to get the sheet name based on provider name
 get_sheet_name <- function(provider_name) {
-  sheet_name_rules[provider_name]
+  sheet_parameters$SheetNames[provider_name]
 }
   
 extract_date <- function(file_name) {
@@ -104,12 +98,25 @@ process_file <- function(file_path) {
     return(NULL)
   }
   
-  # Get the sheet name based on the provider name
-  sheet_name <- get_sheet_name(provider_name)
+  # Get the sheet parameters and sheet name based on the provider name
+  provider_params <- sheet_parameters %>%
+    filter(Provider == provider_name)
+  
+  if (nrow(provider_params) == 0) {
+    warning("Sheet parameters not found for provider: ", provider_name)
+    return(NULL)
+  }
+  
+  # Extract parameters
+  skip_rows <- provider_params$SkipRows
+  range_start <- provider_params$RangeStart
+  range_end <- provider_params$RangeEnd
+  sheet_name <- provider_params$SheetName
+  
   
   # Read the specified sheet, skipping non-tabular rows
   weekly_data <- tryCatch(
-    read_excel(file_path, sheet = sheet_name, col_names = FALSE, skip = 19, range = 'D20:Q40'),
+    read_excel(file_path, sheet = sheet_name, col_names = FALSE, skip = skip_rows, range = paste0(range_start, ":", range_end)),
     error = function(e) {
       warning("Failed to read sheet for file: ", file_name)
       return(NULL)
@@ -123,13 +130,18 @@ process_file <- function(file_path) {
   }
   
   # Check if the number of columns matches the expected number
-  if (ncol(weekly_data) != length(x)) {
+  if (ncol(weekly_data) != length(column_names)) {
     warning("Column mismatch in file: ", file_name)
     return(NULL)
   }
   
+  
   # Assign column names
-  colnames(weekly_data) <- x
+  colnames(weekly_data) <- column_names
+  
+   # Convert columns to numeric, preserving NAs
+  weekly_data <- weekly_data %>%
+    mutate(across(.cols = -Speciality, .fns = ~ as.numeric(.)))
   
   # Add the provider name and report date as new columns
   weekly_data %>%
@@ -145,6 +157,10 @@ process_file <- function(file_path) {
 # Read and combine all files into one data frame
 combined_data <- map_dfr(file_list, process_file)
 
+
+combined_data_formatted <- combined_data %>%
+  filter(!is.na(Speciality))
+
 # Print the first few rows of the combined data for verification
 print(head(combined_data))
 
@@ -156,10 +172,15 @@ print(head(combined_data))
 
 ```{r}
 
+
+combined_data_formatted <- combined_data %>%
+  filter(!is.na(Speciality))
+
+
 # Pivot the combined data from wide to long format for all relevant columns
-Long_data <- combined_data %>%
+Long_data <- combined_data_formatted %>%
   pivot_longer(
-    cols = x[-1], # Exclude 'Speciality' since it is not a value column
+    cols = column_names[-1], # Exclude 'Speciality' since it is not a value column
     names_to = "Description",
     values_to = "Activity"
   )
