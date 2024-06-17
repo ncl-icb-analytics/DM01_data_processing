@@ -22,6 +22,10 @@
 *.ipynb
 *.ipynb_checkpoints
 *.html
+*.pptx
+*.png
+*.jpg
+*.jpeg
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -162,10 +166,16 @@ cython_debug/
 # VS Code project files
 .vscode/
 
-#Exempt Files
 
-!src/Row_skip_rules.csv
+#Exempt Files
+##Lookup Files
 !src/Sheet_parameters.csv
 !src/Column_Names.csv
 !src/Provider_columns.csv
 !src/Provider_columns2.csv
+!src/Row_skip_rules.csv
+
+##Template for PPT 
+!input/template.pptx
+
+
