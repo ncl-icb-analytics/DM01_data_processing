@@ -2,7 +2,7 @@
 library(tidyverse)
 library(ggrepel)
 library(lubridate)
-#library(zoo)
+library(readxl)
 library(NCLRtemplates)
 library(officer)
 
@@ -11,6 +11,65 @@ library(officer)
 # using NCL for now - but should label providers with specific colours for consistency
 
 # Wrangling functions ----
+
+## snake case for character variables
+text_normalisation <-function(column_name){
+  
+  name <- str_to_lower(column_name)%>%
+    str_squish()%>%
+    str_replace_all(" ", "_")
+  
+  return(name)
+}
+
+## ingestion of raw data
+# Function to process each file
+ingest_raw_data_file <- function(file_path) {
+  
+  # Get the sheet parameters for the specific provider
+  provider_name <- text_normalisation(str_extract(basename(file_path), "^[^_]+"))
+  
+  provider_params <- sheet_parameters %>% 
+    filter(Provider == provider_name)
+  
+  # warning if no parameters are found
+  if (nrow(provider_params) == 0) {
+    warning("Sheet parameters not found for provider: ", provider_name)
+    return(NULL)
+  }
+  
+  # Extract the parameters for reading the Excel sheets
+  skip_rows <- provider_params$SkipRows
+  range_start <- provider_params$RangeStart
+  range_end <- provider_params$RangeEnd
+  sheet_name <- provider_params$SheetName
+  
+  # Get the column names for each provider
+  column_names <-  filter(Indicators, Provider == provider_name)$Indicator
+  
+  # Read the specified sheet, skipping non-tabular rows
+  weekly_data <- tryCatch(
+    read_excel(file_path, sheet = sheet_name, col_names = FALSE, skip = skip_rows, range = paste0(range_start, ":", range_end)),
+    error = function(e) {
+      warning("Failed to read sheet for file: ", file_name)
+      return(NULL)
+    }
+  )
+  
+  if (is.null(weekly_data) || nrow(weekly_data) == 0) {
+    warning("No data found in ", file_path)
+    return(NULL)
+  }
+  
+  # Assign column names based on provider
+  colnames(weekly_data) <- column_names
+  
+  # Convert columns to numeric, keeping NAs (except the Speciality column)
+  weekly_data <- weekly_data %>%
+    mutate(across(.cols = -Speciality, .fns = ~ as.numeric(.))) %>%
+    pivot_longer(-Speciality, names_to = 'Indicator', values_to = 'Activity') %>%
+    drop_na(Speciality)
+}
 
 ## filter data for plotting
 filter_plot_data <- function(data, provider = 'all', speciality_group = 'all', specialty = 'all', indicator = 'all', report_date, duration){
@@ -49,16 +108,7 @@ filter_plot_data <- function(data, provider = 'all', speciality_group = 'all', s
 }
 
 
-## snake case for character variables
-text_normalisation <-function(column_name){
-  
-  name <- str_to_lower(column_name)%>%
-    str_squish()%>%
-    str_replace_all(" ", "_")
-  
-  return(name)
-  
-}
+
 
 ## graphing code --- 
 
