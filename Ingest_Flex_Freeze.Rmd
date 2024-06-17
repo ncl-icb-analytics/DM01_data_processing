@@ -3,15 +3,15 @@ title: "Ingest_Flex_Freeze"
 author: "Arush Mohan"
 date: "`r Sys.Date()`"
 output: html_document
+params:
+  report_date: 20240512
+  freeze_window: 7
 ---
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-
-library(readxl)
-library(tidyverse)
-library(lubridate)
-library(flexdashboard)
+source('src/functions.R')
 
 ```
 
@@ -21,29 +21,21 @@ library(flexdashboard)
 
 ```{r}
 
-# Define the directories containing the Excel files
-main_folder <- "data/2024-06-09/"
+# Extract the date from the main folder name
+main_folder_date <- as.Date(ymd(params$report_date), format = "%Y-%m-%d")
+
+# Calculate the date for freeze files
+freeze_date <- ymd(params$report_date) - days(params$freeze_window)
+
+# Define folders
+main_folder <- paste0('data/', main_folder_date)
 dir_path_flex <- file.path(main_folder, "Flex")
 dir_path_freeze <- file.path(main_folder, "Freeze")
 
 ```
 
 
-## Assigning dates based on folder names
-
-```{r}
-
-# Extract the date from the main folder name
-main_folder_date <- as.Date(basename(main_folder), format = "%Y-%m-%d")
-
-# Calculate the date for freeze files
-freeze_date <- main_folder_date - 7
-
-
-```
-
-
-## Reading in the files
+## Listing the files in the directory
 
 ```{r}
 
@@ -55,7 +47,7 @@ file_list_freeze <- list.files(path = dir_path_freeze, pattern = "*.xlsx", full.
 
 
 
-##Combining file lists and differentiating flex/freeze
+## Combining file lists and differentiating flex/freeze
 
 ```{r}
 
@@ -64,241 +56,75 @@ file_list <- tibble(
   file_path = c(file_list_flex, file_list_freeze),
   DataType = c(rep("flex", length(file_list_flex)), rep("freeze", length(file_list_freeze))),
   ReportDate = c(rep(main_folder_date, length(file_list_flex)), rep(freeze_date, length(file_list_freeze)))
-)
+) %>%
+  mutate(provider_name = text_normalisation(str_extract(basename(file_path), "^[^_]+"))) 
 
 ```
 
-
-## Identifying and separating GOSH files
-
-```{r}
-
-# Identify GOSH files
-gosh_files <- file_list %>%
-  filter(str_detect(basename(file_path), "^GOSH_")) %>%
-  select(file_path, DataType, ReportDate)
-
-# Remove GOSH files from the main file_list
-file_list <- file_list %>%
-  filter(!str_detect(basename(file_path), "^GOSH_"))
-
-
-```
 
 
 ## Defining columns and sheet parameters
 
 ``` {r}
-# Define the column names
-col_names_df <- read_csv("src/Provider_columns2.csv")
+# Read the column names
+indicator_list <- read_csv("input/Provider_indicator_list.csv")
+provider_list <- file_list %>%
+  select(provider_name) %>%
+  distinct()
 
-# Separate column names for GOSH
-gosh_column_names <- col_names_df$GOSH
+# Build full list
+Indicators <- expand_grid(Provider = provider_list$provider_name, Indicator = indicator_list$Indicator)
 
-# General column names for other providers
-general_column_names <- col_names_df$All
+# Modifications
+## read
+Indicator_edits <- read_csv('input/Provider_inconsistency_adjustment.csv')
+  
+## remove missing
+Missing_indicators <- Indicator_edits %>%
+  filter(Issue == 'Missing')
 
+Indicators <- Indicators %>%
+  filter(!paste0(Provider, '_', Indicator) %in% paste0(Missing_indicators$Provider, '_', Missing_indicators$Indicator))
+
+## Add new - NEEDS TESTING
+New_indicators <- Indicator_edits %>%
+  filter(Issue == 'Additional') %>%
+  select(Provider, Indicator)
+
+Indicators <- Indicators %>%
+  bind_rows(New_indicators)
 
 # Read combined sheet parameters and sheet names from CSV
-sheet_parameters <- read_csv("src/Sheet_parameters.csv")
+sheet_parameters <- read_csv("input/Sheet_parameters.csv") %>%
+  mutate(Provider  = text_normalisation(Provider))
 
 ```
 
-
-
-## Data processing function - general
-
-```{r}
-
-# Function to process each file
-process_file <- function(file_path, data_type, report_date) {
-  # Extract the file name from the file path
-  file_name <- basename(file_path)
-  # Extract the provider name from the file name
-  provider_name <- str_extract(file_name, "^[^_]+")
-  
-  # Get the sheet parameters for the specific provider
-  provider_params <- sheet_parameters %>% filter(Provider == provider_name)
-  
-  # warning if no parameters are found
-  if (nrow(provider_params) == 0) {
-    warning("Sheet parameters not found for provider: ", provider_name)
-    return(NULL)
-  }
-  
-  # Extract the parameters for reading the Excel sheets
-  skip_rows <- provider_params$SkipRows
-  range_start <- provider_params$RangeStart
-  range_end <- provider_params$RangeEnd
-  sheet_name <- provider_params$SheetName
-  
-  # Read the specified sheet, skipping non-tabular rows
-  weekly_data <- tryCatch(
-    read_excel(file_path, sheet = sheet_name, col_names = FALSE, skip = skip_rows, range = paste0(range_start, ":", range_end)),
-    error = function(e) {
-      warning("Failed to read sheet for file: ", file_name)
-      return(NULL)
-    }
-  )
-  
-  if (is.null(weekly_data) || nrow(weekly_data) == 0) {
-    warning("No data found in ", file_path)
-    return(NULL)
-  }
-  
-  # Assign column names based on provider
-  colnames(weekly_data) <- general_column_names
-  
-  # Convert columns to numeric, keeping NAs (except the Speciality column)
-  weekly_data <- weekly_data %>%
-    mutate(across(.cols = -Speciality, .fns = ~ as.numeric(.)))
-  
-  weekly_data %>%
-    mutate(ProviderName = provider_name, ReportDate = report_date, DataType = data_type)
-}
-
-
-```
-
-
-## Combining the datasets
+## Extracting the data
 
 ```{r}
 # Read and combine all files into one data frame
 combined_data <- file_list %>%
-  mutate(data = pmap(list(file_path, DataType, ReportDate), ~process_file(..1, ..2, ..3))) %>%
-  select(-file_path, -DataType, -ReportDate) %>%
-  filter(map_lgl(data, ~ !is.null(.x))) %>%
-  unnest(cols = c(data))
+  mutate(data = map(.x = file_path, ~ingest_raw_data_file(file_path = .x))) %>% # function in function.R
+  #filter(map_lgl(data, ~ !is.null(.x))) %>% # I don't think you need this
+  unnest(cols = c(data)) %>%
+  select(-file_path)
+  
 
 ```
-
-
-
-## Data processing function for GOSH files
-
+## Processing for upload
 ```{r}
+#speciality_grouping <- read_csv('input/grouping.csv') # commented out, should be added in visualisation only
 
-# Function to process each file
-process_file_gosh <- function(file_path, data_type, report_date) {
-  # Extract the file name from the file path
-  file_name <- basename(file_path)
-  # Extract the provider name from the file name
-  provider_name <- str_extract(file_name, "^[^_]+")
-  
-  # Get the sheet parameters for the specific provider
-  provider_params <- sheet_parameters %>% filter(Provider == provider_name)
-  
-  # warning if no parameters are found
-  if (nrow(provider_params) == 0) {
-    warning("Sheet parameters not found for provider: ", provider_name)
-    return(NULL)
-  }
-  
-  # Extract the parameters for reading the Excel sheets
-  skip_rows <- provider_params$SkipRows
-  range_start <- provider_params$RangeStart
-  range_end <- provider_params$RangeEnd
-  sheet_name <- provider_params$SheetName
-  
-  # Read the specified sheet, skipping non-tabular rows
-  weekly_data <- tryCatch(
-    read_excel(file_path, sheet = sheet_name, col_names = FALSE, skip = skip_rows, range = paste0(range_start, ":", range_end)),
-    error = function(e) {
-      warning("Failed to read sheet for file: ", file_name)
-      return(NULL)
-    }
-  )
-  
-  if (is.null(weekly_data) || nrow(weekly_data) == 0) {
-    warning("No data found in ", file_path)
-    return(NULL)
-  }
-  
-  # Assign column names based on provider
-  colnames(weekly_data) <- gosh_column_names
-  
-  # Convert columns to numeric, keeping NAs (except the Speciality column)
-  weekly_data <- weekly_data %>%
-    mutate(across(.cols = -Speciality, .fns = ~ as.numeric(.)))
-  
-  weekly_data %>%
-    mutate(ProviderName = provider_name, ReportDate = report_date, DataType = data_type)
-}
-
-
-
-
+combined_data<- combined_data %>%
+  separate_wider_delim(Indicator, '-', names = c('Indicator','Description'), too_few = 'align_start') %>% # split indicators
+  mutate(Description = replace_na(Description, 'None'))#%>% 
+  #left_join(speciality_grouping) # adding context # commented out, should be added in visualisation only
 ```
 
-
-## Processing GOSH data
-
-```{r}
-# Process GOSH files 
-gosh_data <- gosh_files %>%
-  mutate(data = pmap(list(file_path, DataType, ReportDate), ~ process_file_gosh(..1, ..2, ..3))) %>%
-  filter(map_lgl(data, ~ !is.null(.x))) %>%
-  select(data) %>%
-  unnest(cols = data)
-
-```
-
-
-## Adding missing columns to equalise df structure
-
-```{r}
-# Add missing columns for GOSH (if needed)
-if (nrow(gosh_data) > 0) {
-  missing_columns <- setdiff(general_column_names, colnames(gosh_data))
-  for (col in missing_columns) {
-    gosh_data[[col]] <- NA
-  }
-}
-
-```
-
-
-## Appending the GOSH data to combined data
-
+## Add upload to sandpit sections - override for freeze, simple upload for flex
 ```{r}
 
-# Append GOSH data to combined_data
-combined_data_final <- bind_rows(combined_data, gosh_data)
-
-```
-
-
-## Formatting the combined data to remove empty rows
-
-```{r}
-
-combined_data_formatted <- combined_data_final %>%
-  filter(!is.na(Speciality))
-
-# Print the first few rows of the combined data for verification
-print(head(combined_data))
-
-```
-
-
-
-## Pivoting the data
-
-```{r}
-
-# Pivot the combined data from wide to long format for all relevant columns
-Long_data <- combined_data_formatted %>%
-  pivot_longer(
-    cols = general_column_names[-1], # Exclude 'Speciality' since it is not a value column
-    names_to = "Description",
-    values_to = "Activity"
-  )
-  
-
-  
-# Print the first few rows of the combined data
-head(Long_data)
-
+# delete last week and upload all?
 
 ```

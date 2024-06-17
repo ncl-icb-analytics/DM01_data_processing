@@ -169,11 +169,13 @@ cython_debug/
 
 #Exempt Files
 ##Lookup Files
-!src/Sheet_parameters.csv
-!src/Column_Names.csv
-!src/Provider_columns.csv
-!src/Provider_columns2.csv
-!src/Row_skip_rules.csv
+!input/Sheet_parameters.csv
+!input/Column_Names.csv
+!input/Provider_columns.csv
+!input/Provider_columns2.csv
+!input/Row_skip_rules.csv
+!input/Provider_indicator_list.csv
+!input/Provider_inconsistency_adjustment.csv
 
 ##Template for PPT 
 !input/template.pptx
