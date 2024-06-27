@@ -4,7 +4,7 @@ author: "Arush Mohan"
 date: "`r Sys.Date()`"
 output: html_document
 params:
-  report_date: 20240512
+  report_date: 20240609
   freeze_window: 7
 ---
 
@@ -126,5 +126,30 @@ combined_data<- combined_data %>%
 ```{r}
 
 # delete last week and upload all?
+#The function will replace last week's flex data with freeze data and append the new flex data
+
+upload_combined_data <- function(con, combined_data) {
+  # Separate the data into flex and freeze
+  flex_data <- combined_data %>% filter(DataType == "flex")
+  freeze_data <- combined_data %>% filter(DataType == "freeze")
+  
+  # Iterate through each provider and date in the freeze data
+  for (i in 1:nrow(freeze_data)) {
+    provider <- freeze_data$provider_name[i]
+    report_date <- freeze_data$ReportDate[i]
+    
+    # Delete matching flex data from the database
+    dbExecute(con, 
+              paste("DELETE FROM table_name WHERE DataType = 'flex' AND provider_name = '", provider, 
+                    "' AND ReportDate = '", report_date, "'", sep = ""))
+  }
+  
+  # Upload the freeze data to the database
+  dbWriteTable(con, "table_name", freeze_data, append = TRUE, row.names = FALSE)
+  
+  # Upload the new flex data to the database
+  dbWriteTable(con, "table_name", flex_data, append = TRUE, row.names = FALSE)
+}
+
 
 ```

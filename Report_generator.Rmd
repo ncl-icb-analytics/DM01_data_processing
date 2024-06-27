@@ -28,11 +28,11 @@ Functions:
 - Ingesting intermediate data from a dummy file. This will change to ingestion from the sandpit.
 - Ingesting the template file
 - Deleting any preexisting output
-- Initialising the presentation opject
+- Initialising the presentation object
 
 ```{r}
 # Data ingestion
-data = read_csv('inter.csv')
+data = read_csv('data/inter.csv')
 
 # Ingest and initiaise blank presentation
 template_presentation <- read_pptx('input/template.pptx') 
@@ -123,12 +123,41 @@ aggregated_data = filtered_data %>%
   ungroup() 
 
 # Plot data
-plot = line_plot_time(aggregated_data, Provider, 'Number of people', 'Diagnostic 6+ Week waits per provider')
+plot = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagnostic 6+ Week waits per provider')
 
 # Embed data in slide
 Presentation <- Presentation%>% 
   ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 3"))
 ```
+
+
+
+#### Endoscopy System Backlog By Provider
+
+
+```{r}
+
+filtered_data2 <- filter_plot_data(data = data, speciality_group = 'Endoscopy', indicator = 'diagnostic_waiting_list', report_date = params$report_date, duration = 7)
+
+filtered_data2 <- filtered_data2 %>% 
+  filter(Description == 'total')
+
+data_summary <- filtered_data2 %>%
+  group_by(Provider, Speciality) %>%
+  summarize(Total_Activity = sum(Activity, na.rm = TRUE), .groups = 'drop') %>%
+  pivot_wider(names_from = Speciality, values_from = Total_Activity, values_fill = 0)
+
+head(data_summary)
+
+summary_table <- flextable(data_summary)
+
+
+Presentation <- Presentation %>%
+  add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
+  ph_with(value = summary_table, location = ph_location_label(ph_label = "Content Placeholder 3"))
+```
+
+
 
 ```{r}
 Presentation %>%
@@ -141,17 +170,17 @@ Presentation %>%
 
 ```{r echo=FALSE, eval = FALSE}
 
-layouts <- layout_summary(my_pres)
+layouts <- layout_summary(template_presentation)
 
 print_placeholders <- function(layout_name, master_name){
-  placeholders <- layout_properties(my_pres, layout = layout_name, master = master_name)
+  placeholders <- layout_properties(template_presentation, layout = layout_name, master = master_name)
   print(paste("PLaceholders:", layout_name, master_name))
   print(placeholders)
 }
 
 walk2(.x = layouts$layout, .y = layouts$master, ~print_placeholders(.x, .y))
 
-layout_properties(my_pres, layout = "Two Columns Style 1", master = "Content Slide White")
+layout_properties(template_presentation, layout = "Two Columns Style 1", master = "Content Slide White")
 
 #ggsave('review.png', plot)
 ```
