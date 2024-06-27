@@ -3,7 +3,7 @@ title: "Report_generation"
 output: html_document
 date: "2024-06-14"
 params:
-  report_date: 20240201
+  report_date: 20240501
   duration: 30
 ---
 
@@ -287,6 +287,24 @@ prov_plot2 = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagn
 Presentation <- Presentation%>% 
   ph_with(value = prov_plot2, location = ph_location_label(ph_label = "Content Placeholder 3"))
 ```
+
+
+
+## Inhealth Performance
+
+```{r}
+inhealth_data <- filter_plot_data(data = data, provider = 'InHealth', indicator = 'diagnostic_waiting_list', report_date = params$report_date, duration = params$duration)
+
+inhealth_data <- inhealth_data %>% 
+  filter(Speciality == c('Magnetic Resonance Imaging', 'Non-obstetric Ultrasound', 'DEXA Scan', 'Cardiology - Echocardiography'), Description == 'total')
+
+inh_plot <- line_plot_time(inhealth_data, Speciality, 'Number of cases', 'Wait by provider_') +
+  facet_wrap(~ Speciality)
+
+print(inh_plot)
+```
+
+
 
 
 ```{r}
