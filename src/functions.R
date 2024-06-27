@@ -5,6 +5,7 @@ library(lubridate)
 library(readxl)
 library(NCLRtemplates)
 library(officer)
+library(xtable)
 
 
 # Themes??? ----

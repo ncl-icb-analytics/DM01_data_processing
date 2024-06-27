@@ -39,6 +39,25 @@ template_presentation <- read_pptx('input/template.pptx')
 
 ```
 
+
+## Connecting to the Sandpit
+
+```{r}
+
+# Retrieve data from the desired table
+
+# data <- dbReadTable(con, "table_name")
+
+
+# Code for executing a specific query instead - commented out
+
+# query <- "SELECT * FROM table_name WHERE specific_date = date"
+
+# data <- dbGetQuery(con, query)
+
+```
+
+
 # Building Presentation
 
 Proposed structure is sub heading per slide, with one chunk per slide element
@@ -132,36 +151,157 @@ Presentation <- Presentation%>%
 
 
 
-#### Endoscopy System Backlog By Provider
+
+## Imaging Performance
+
+```{r}
+# Filter data
+imaging_data = filter_plot_data(data = data, speciality_group = 'Imaging', report_date = params$report_date, duration = params$duration)
+
+# Calculate metric
+aggregated_data = imaging_data %>%
+  filter(Indicator %in% c('diagnostic_waiting_list', 'wait_list'), 
+         !str_detect(Description, 'tci')) %>%
+  mutate(
+    Length = case_when(
+      Description == 'total' ~ 'Over_Six',
+      str_detect(Description, 'weeks') ~ 'Under_Six'
+    )
+  ) %>%
+  group_by(Date, Length) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = Date, names_from = Length, values_from = Activity) %>%
+  mutate(Total = Over_Six + Under_Six,
+         Prop_over_six = round(Over_Six/Total*100,0)) 
+
+# Plot data
+coeff <- 40
+
+plot = ggplot(aggregated_data, aes(x=Date, y = Over_Six, label = paste0(Over_Six, '\n(', Prop_over_six, '%)'))) +
+  geom_bar( stat="identity", fill =  "#1B9B9D") + 
+  geom_text(size = 11, position = position_stack(vjust=0.5), colour = 'white')+
+  geom_line( aes(y=Prop_over_six*coeff), color = "#005EB8") +
+   scale_y_continuous(
+    
+    # Features of the first axis
+    name = "Cases",
+    
+    # Add a second axis and specify its features
+    sec.axis = sec_axis(~./coeff, name="%")
+  ) + 
+  theme_nclicb()+
+  ggtitle('NCL Diagnostic Performance - Actual and Wating %')+
+  theme(legend.position = 'none',
+          text = element_text(size = 40)
+         )
+
+
+# Embed data in slide
+Presentation <- Presentation %>%
+  add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
+  ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 2"))
+
+
+
+# Calculate metric
+aggregated_data = imaging_data %>%
+  filter(Description == 'total')%>%
+  group_by(Date, Provider) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup() 
+
+# Plot data
+plot = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagnostic 6+ Week waits per provider')
+
+Presentation <- Presentation%>% 
+  ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 3"))
+
+```
+
+
+#### Imaging Backlog By Provider
 
 
 ```{r}
 
-filtered_data2 <- filter_plot_data(data = data, speciality_group = 'Endoscopy', indicator = 'diagnostic_waiting_list', report_date = params$report_date, duration = 7)
 
-filtered_data2 <- filtered_data2 %>% 
+filtered_data2 <- imaging_data %>% 
   filter(Description == 'total')
 
+# Summarize and reshape the data
 data_summary <- filtered_data2 %>%
   group_by(Provider, Speciality) %>%
   summarize(Total_Activity = sum(Activity, na.rm = TRUE), .groups = 'drop') %>%
   pivot_wider(names_from = Speciality, values_from = Total_Activity, values_fill = 0)
 
-head(data_summary)
+# Calculate the total row
+total_row <- data_summary %>%
+  summarize(across(where(is.numeric), sum, na.rm = TRUE)) %>%
+  mutate(Provider = "NCL")
 
-summary_table <- flextable(data_summary)
+# Calculate percentages
+data_percentage <- data_summary %>%
+  mutate(across(where(is.numeric), ~ . / sum(.) * 100))
 
+# Combine the percentage data with the total row
+final_table <- bind_rows(data_percentage, total_row) %>%
+  mutate(across(where(is.numeric), ~ ifelse(Provider == "NCL", ., sprintf("%.2f%%", .))))
+
+
+summary_table <- xtable(final_table)
+
+# Add table to ppt
+Presentation <- Presentation %>%
+  add_slide(layout = "Image Style 1", master = "Content Slide White")  %>%
+  ph_with(value = final_table, location = ph_location_label(ph_label = "Graphic 5"))
+
+```
+
+
+#### Waiting list trend by Provider
+
+```{r}
+
+
+prov_plot = ggplot(aggregated_data, aes(y = Activity, x = Date, color = Provider)) +
+  geom_line(na.rm = TRUE) +
+  geom_point(na.rm = TRUE) +
+  scale_x_date(date_breaks = "1 week", date_labels = "%d-%m-%Y") +
+  labs(
+    title = "Imaging waiting list trend by provider",
+    x = "Date"
+  ) +
+  facet_wrap(~ Provider) +
+  theme_nclicb() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_colour_ncl() 
 
 Presentation <- Presentation %>%
   add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
-  ph_with(value = summary_table, location = ph_location_label(ph_label = "Content Placeholder 3"))
-```
+  ph_with(value = prov_plot, location = ph_location_label(ph_label = "Content Placeholder 2"))
 
+prov_plot2 = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagnostic 6+ Week waits per provider') +
+  facet_wrap(~ Provider)
+
+Presentation <- Presentation%>% 
+  ph_with(value = prov_plot2, location = ph_location_label(ph_label = "Content Placeholder 3"))
+```
 
 
 ```{r}
 Presentation %>%
   print(target = paste0('output/diagnostic_report_data_', params$report_date, '.pptx'))
+
+```
+
+
+
+## Closing the Sandpit connection
+
+```{r}
+
+# dbDisconnect(con)
 
 ```
 
