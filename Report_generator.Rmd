@@ -259,6 +259,9 @@ Presentation <- Presentation %>%
 ```
 
 
+
+
+
 #### Waiting list trend by Provider
 
 ```{r}
@@ -293,10 +296,11 @@ Presentation <- Presentation%>%
 ## Inhealth Performance
 
 ```{r}
-inhealth_data <- filter_plot_data(data = data, provider = 'InHealth', indicator = 'diagnostic_waiting_list', report_date = params$report_date, duration = params$duration)
+inhealth_data <- filter_plot_data(data = data, provider = 'InHealth', indicator = 'diagnostic_waiting_list', report_date = params$report_date, duration = params$duration + 60)
 
 inhealth_data <- inhealth_data %>% 
-  filter(Speciality == c('Magnetic Resonance Imaging', 'Non-obstetric Ultrasound', 'DEXA Scan', 'Cardiology - Echocardiography'), Description == 'total')
+  filter(Speciality == c('Magnetic Resonance Imaging', 'Non-obstetric Ultrasound', 'DEXA Scan', 'Cardiology - Echocardiography'), 
+         Description == 'total')
 
 inh_plot <- line_plot_time(inhealth_data, Speciality, 'Number of cases', 'Wait by provider_') +
   facet_wrap(~ Speciality)
@@ -304,8 +308,209 @@ inh_plot <- line_plot_time(inhealth_data, Speciality, 'Number of cases', 'Wait b
 print(inh_plot)
 ```
 
+#### Creating a table for InHealth data
+
+```{r}
 
 
+# Pivot the data to wide format
+data_wide <- inhealth_data %>%
+  mutate(Week = lubridate::floor_date(Date, "week")) %>%
+  group_by(Provider, Speciality, Week) %>%
+  summarize(Activity = sum(Activity), .groups = 'drop') %>%
+  pivot_wider(names_from = Week, values_from = Activity, values_fill = 0) %>%
+  ungroup()
+
+
+
+
+# Convert data_wide to gt table
+gt_table <- inhealth_data %>%
+  gt() %>%
+  tab_header(
+    title = "Activity Numbers"
+  ) %>%
+  cols_label(
+    Provider = "Provider",
+    Speciality = "Speciality"
+  ) %>%
+  fmt_number(
+    columns = starts_with("202"),
+    decimals = 0
+  ) %>%
+  tab_style(
+    style = list(
+      cell_fill(color = "lightgray")
+    ),
+    locations = cells_body(
+      columns = starts_with("202")
+    )
+  )
+
+
+
+gt_table2 <- create_wide_table(data_wide, "Activity Numbers")
+
+print(gt_table2)
+```
+
+
+
+## Code for automation of generic information
+
+
+```{r}
+
+# Aggregate data by Date
+aggregate_data <- aggregated_data %>%
+  group_by(Date) %>%
+  summarise(
+    TotalActivity = sum(Activity),
+    AverageActivity = mean(Activity),
+    MaxActivity = max(Activity)
+  ) %>%
+  arrange(Date) %>%
+  ungroup()
+
+# Function to generate aggregate sentence
+generate_aggregate_sentence <- function(df) {
+  sentences <- paste(
+    "For the week ending", format(df$Date, "%d/%m/%Y"),
+    ", the total activity was", df$TotalActivity,
+    "with an average activity of", df$AverageActivity,
+    "and a maximum activity of", df$MaxActivity, "."
+  )
+  return(sentences)
+}
+
+# Generate aggregate sentences
+aggregate_sentences <- lapply(1:nrow(aggregate_data), function(i) {
+  generate_aggregate_sentence(aggregate_data[i, ])
+})
+
+
+print(aggregate_sentences)
+
+```
+
+
+#### Generic sentences 
+
+
+```{r}
+
+# Aggregate data by Date
+aggregate_data <- aggregated_data %>%
+  group_by(Date) %>%
+  summarise(
+    TotalActivity = sum(Activity)
+  ) %>%
+  arrange(Date) %>%
+  ungroup()
+
+# Function to generate sentences
+generate_sentences <- function(df) {
+  previous_week <- lag(df$TotalActivity)
+  previous_week_change <- df$TotalActivity - previous_week
+  previous_week_change_percent <- (previous_week_change / previous_week) * 100
+  avg_activity_last_year <- mean(df$TotalActivity) / mean(df$TotalActivity - 52)
+
+  sentences <- list(
+    paste("For the w/e", format(df$Date, "%d/%m/%Y"), ", the total activity was", 
+          format(df$TotalActivity, big.mark = ",", scientific = FALSE), "."),
+    paste("The number of patients waiting over 6 weeks increased by", 
+          format(previous_week_change, big.mark = ","), "to", 
+          format(df$TotalActivity, big.mark = ","), ". Over 6-week wait, performance increased by", 
+          round(previous_week_change_percent, 1), "% to", round(avg_activity_last_year, 1), "%."),
+    paste("Activity reduced by", format(previous_week_change, big.mark = ","), 
+          "to", format(df$TotalActivity, big.mark = ","), "from the previous week. The 4-week average activity was",
+          round(avg_activity_last_year, 1), "% compared to last year (same week).")
+  )
+  
+  return(sentences)
+}
+
+# Generate sentences for each week
+sentences_list <- generate_sentences(aggregate_data)
+
+print(sentences_list)
+```
+
+
+
+
+
+
+```{r}
+
+# Filter data
+filtered_data = filter_plot_data(data = data, speciality_group = 'Imaging', indicator = 'diagnostic_waiting_list', report_date = params$report_date, duration = 6000)
+
+# Calculate metric
+aggregated_data = filtered_data %>%
+  filter(Description == 'total')%>%
+  group_by(Date, Provider) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup() 
+
+
+# Aggregate data by Date
+aggregate_data <- aggregated_data %>%
+  group_by(Date) %>%
+  summarise(
+    TotalActivity = sum(Activity)
+  ) %>%
+  arrange(Date) %>%
+  ungroup()
+
+# Function to generate sentences for the most recent date
+generate_sentences <- function(df) {
+  # Sort data by Date descending to ensure newest date is last
+  df <- df %>% arrange(desc(Date))
+  
+  # Retrieve the first row (most recent date) from df
+  df <- df[1, ]  # Assuming df has been sorted by Date in descending order
+  
+  # Check if data has more than one row (not necessary here since we are dealing with only one row)
+  
+  # Compute lag based on the arranged order
+  previous_week <- lag(df$TotalActivity)
+  
+  # Calculate changes and percentages
+  previous_week_change <- df$TotalActivity - previous_week
+  previous_week_change_percent <- (previous_week_change / previous_week) * 100
+  avg_activity_last_year <- mean(df$TotalActivity) / mean(df$TotalActivity - 52)
+  
+  # Format sentences
+  sentences <- list(
+    paste("For the w/e", format(df$Date, "%d/%m/%Y"), ", the total activity was", 
+          format(df$TotalActivity, big.mark = ",", scientific = FALSE), "."),
+    paste("The number of patients waiting over 6 weeks increased by", 
+          format(previous_week_change, big.mark = ","), "to", 
+          format(df$TotalActivity, big.mark = ","), ". Over 6-week wait, performance increased by", 
+          ifelse(is.na(previous_week_change_percent), "NA", paste(round(previous_week_change_percent, 1), "%")),
+          "to", 
+          ifelse(is.na(avg_activity_last_year), "NA", paste(round(avg_activity_last_year, 1), "%")), "."),
+    paste("Activity reduced by", 
+          format(previous_week_change, big.mark = ","), 
+          "to", 
+          format(df$TotalActivity, big.mark = ","), 
+          "from the previous week. The 4-week average activity was",
+          ifelse(is.na(avg_activity_last_year), "NA", paste(round(avg_activity_last_year, 1), "%")),
+          "compared to last year (same week).")
+  )
+  
+  return(sentences)
+}
+
+# Generate sentences for the most recent date
+sentences_list <- generate_sentences(aggregate_data)
+
+print(sentences_list)
+
+
+
+```
 
 ```{r}
 Presentation %>%
@@ -315,7 +520,7 @@ Presentation %>%
 
 
 
-## Closing the Sandpit connection
+# Closing the Sandpit connection
 
 ```{r}
 

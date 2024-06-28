@@ -6,7 +6,7 @@ library(readxl)
 library(NCLRtemplates)
 library(officer)
 library(xtable)
-
+library(gt)
 
 # Themes??? ----
 # using NCL for now - but should label providers with specific colours for consistency
@@ -151,6 +151,68 @@ ggplot(data, aes(x = Date, y = Activity, group = {{plot_var}}, colour = {{plot_v
          )+
     scale_colour_ncl()
 }
+
+
+
+## function to create tables using GT ---
+
+# function for long data
+create_gt_table <- function(data, title) {
+  
+  # Convert data to gt table
+  gt_table <- data %>%
+    gt() %>%
+    tab_header(
+      title = title
+    ) %>%
+    cols_label(
+      Provider = "Provider",
+      Speciality = "Speciality",
+      Date = "Date",
+      Activity = "Activity"
+    ) %>%
+    fmt_number(
+      columns = vars(Activity),
+      decimals = 0
+    ) %>%
+    tab_style(
+      style = cell_fill(color = "lightgray"),
+      locations = cells_body(
+        columns = vars(Activity)
+      )
+    )
+  
+  return(gt_table)
+}
+
+
+
+# function for wide data
+create_wide_table <- function(data, title) {
+  
+  gt_table <- data %>%
+    gt() %>%
+    tab_header(
+      title = title
+    ) %>%
+    cols_label(
+      Provider = "Provider",
+      Speciality = "Speciality"
+    ) %>%
+    fmt_number(
+      columns = starts_with("202"),
+      decimals = 0
+    ) %>%
+    tab_style(
+      style = cell_fill(color = "lightgray"),
+      locations = cells_body(
+        columns = starts_with("202")
+      )
+    )
+  
+  return(gt_table)
+}
+
 
 # testing area ----  
 #test = filter_plot_data(data = data, indicator = 'patient_cancelled', specialty = 'Magnetic Resonance Imaging', report_date = 20240201, duration = 30)
