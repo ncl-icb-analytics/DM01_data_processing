@@ -340,7 +340,7 @@ gt_table <- inhealth_data %>%
   ) %>%
   tab_style(
     style = list(
-      cell_fill(color = "lightgray")
+      cell_fill(color = "lightblue")
     ),
     locations = cells_body(
       columns = starts_with("202")
@@ -394,123 +394,92 @@ print(aggregate_sentences)
 ```
 
 
-#### Generic sentences 
-
-
-```{r}
-
-# Aggregate data by Date
-aggregate_data <- aggregated_data %>%
-  group_by(Date) %>%
-  summarise(
-    TotalActivity = sum(Activity)
-  ) %>%
-  arrange(Date) %>%
-  ungroup()
-
-# Function to generate sentences
-generate_sentences <- function(df) {
-  previous_week <- lag(df$TotalActivity)
-  previous_week_change <- df$TotalActivity - previous_week
-  previous_week_change_percent <- (previous_week_change / previous_week) * 100
-  avg_activity_last_year <- mean(df$TotalActivity) / mean(df$TotalActivity - 52)
-
-  sentences <- list(
-    paste("For the w/e", format(df$Date, "%d/%m/%Y"), ", the total activity was", 
-          format(df$TotalActivity, big.mark = ",", scientific = FALSE), "."),
-    paste("The number of patients waiting over 6 weeks increased by", 
-          format(previous_week_change, big.mark = ","), "to", 
-          format(df$TotalActivity, big.mark = ","), ". Over 6-week wait, performance increased by", 
-          round(previous_week_change_percent, 1), "% to", round(avg_activity_last_year, 1), "%."),
-    paste("Activity reduced by", format(previous_week_change, big.mark = ","), 
-          "to", format(df$TotalActivity, big.mark = ","), "from the previous week. The 4-week average activity was",
-          round(avg_activity_last_year, 1), "% compared to last year (same week).")
-  )
-  
-  return(sentences)
-}
-
-# Generate sentences for each week
-sentences_list <- generate_sentences(aggregate_data)
-
-print(sentences_list)
-```
-
-
-
-
-
+#### Imaging sentences 
 
 ```{r}
 
 # Filter data
-filtered_data = filter_plot_data(data = data, speciality_group = 'Imaging', indicator = 'diagnostic_waiting_list', report_date = params$report_date, duration = 6000)
+filtered_data = filter_plot_data(data = data, speciality_group = 'Imaging', report_date = params$report_date, duration = params$duration +600)
 
 # Calculate metric
 aggregated_data = filtered_data %>%
-  filter(Description == 'total')%>%
-  group_by(Date, Provider) %>%
-  summarise(Activity = sum(Activity)) %>%
-  ungroup() 
-
-
-# Aggregate data by Date
-aggregate_data <- aggregated_data %>%
-  group_by(Date) %>%
-  summarise(
-    TotalActivity = sum(Activity)
+  filter(Indicator %in% c('diagnostic_waiting_list', 'wait_list'), 
+         !str_detect(Description, 'tci')) %>%
+  mutate(
+    Length = case_when(
+      Description == 'total' ~ 'Over_Six',
+      str_detect(Description, 'weeks') ~ 'Under_Six'
+    )
   ) %>%
-  arrange(Date) %>%
-  ungroup()
+  group_by(Date, Length) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = Date, names_from = Length, values_from = Activity) %>%
+  mutate(Total = Over_Six + Under_Six,
+         Prop_over_six = round(Over_Six/Total*100,0)) 
 
-# Function to generate sentences for the most recent date
-generate_sentences <- function(df) {
-  # Sort data by Date descending to ensure newest date is last
-  df <- df %>% arrange(desc(Date))
+
+
+
+
+# Function to generate sentences
+generate_sentences <- function(data) {
+  # Ensure data is sorted by Date
+  data <- data %>% arrange(Date)
   
-  # Retrieve the first row (most recent date) from df
-  df <- df[1, ]  # Assuming df has been sorted by Date in descending order
+  # Calculate changes
+  data <- data %>%
+    mutate(
+      PreviousWeekTotal = lag(Total),
+      TotalChange = Total - PreviousWeekTotal,
+      TotalChangePercent = (TotalChange / PreviousWeekTotal) * 100,
+      
+      PreviousWeekOverSix = lag(Over_Six),
+      OverSixChange = Over_Six - PreviousWeekOverSix,
+      OverSixChangePercent = (OverSixChange / PreviousWeekOverSix) * 100,
+      
+      PreviousWeekPropOverSix = lag(Prop_over_six),
+      PropOverSixChange = Prop_over_six - PreviousWeekPropOverSix
+    ) %>%
+    filter(!is.na(PreviousWeekTotal))  # Remove rows where PreviousWeekTotal is NA
   
-  # Check if data has more than one row (not necessary here since we are dealing with only one row)
+  # Get the latest week data
+  latest_week_data <- data %>%
+    filter(Date == max(Date))
   
-  # Compute lag based on the arranged order
-  previous_week <- lag(df$TotalActivity)
+  # Determine the wording based on the change
+  total_change_word <- ifelse(latest_week_data$TotalChange >= 0, "increased", "decreased")
+  over_six_change_word <- ifelse(latest_week_data$OverSixChange >= 0, "increased", "decreased")
   
-  # Calculate changes and percentages
-  previous_week_change <- df$TotalActivity - previous_week
-  previous_week_change_percent <- (previous_week_change / previous_week) * 100
-  avg_activity_last_year <- mean(df$TotalActivity) / mean(df$TotalActivity - 52)
-  
-  # Format sentences
+  # Generate sentences for the latest week
   sentences <- list(
-    paste("For the w/e", format(df$Date, "%d/%m/%Y"), ", the total activity was", 
-          format(df$TotalActivity, big.mark = ",", scientific = FALSE), "."),
-    paste("The number of patients waiting over 6 weeks increased by", 
-          format(previous_week_change, big.mark = ","), "to", 
-          format(df$TotalActivity, big.mark = ","), ". Over 6-week wait, performance increased by", 
-          ifelse(is.na(previous_week_change_percent), "NA", paste(round(previous_week_change_percent, 1), "%")),
-          "to", 
-          ifelse(is.na(avg_activity_last_year), "NA", paste(round(avg_activity_last_year, 1), "%")), "."),
-    paste("Activity reduced by", 
-          format(previous_week_change, big.mark = ","), 
-          "to", 
-          format(df$TotalActivity, big.mark = ","), 
-          "from the previous week. The 4-week average activity was",
-          ifelse(is.na(avg_activity_last_year), "NA", paste(round(avg_activity_last_year, 1), "%")),
-          "compared to last year (same week).")
+    paste("For the week ending", format(latest_week_data$Date, "%d/%m/%Y"), ", the total imaging waiting list", total_change_word, "by",
+          format(abs(latest_week_data$TotalChange), big.mark = ",", scientific = FALSE), "to",
+          format(latest_week_data$Total, big.mark = ",", scientific = FALSE), 
+          "(", ifelse(latest_week_data$TotalChangePercent > 0, "+", ""), 
+          round(latest_week_data$TotalChangePercent, 1), "%) compared to the previous week."),
+    
+    paste("The number of patients waiting over 6 weeks", over_six_change_word, "by", 
+          format(abs(latest_week_data$OverSixChange), big.mark = ",", scientific = FALSE), "to", 
+          format(latest_week_data$Over_Six, big.mark = ",", scientific = FALSE), ". Over 6-week wait, performance", 
+          ifelse(latest_week_data$OverSixChangePercent >= 0, "increased", "decreased"), "by",
+          round(abs(latest_week_data$OverSixChangePercent), 1), "% to",
+          round(latest_week_data$Prop_over_six, 1), "%.")
   )
   
   return(sentences)
 }
 
-# Generate sentences for the most recent date
-sentences_list <- generate_sentences(aggregate_data)
-
+# Generate sentences for the sample data
+sentences_list <- generate_sentences(aggregated_data)
 print(sentences_list)
 
-
-
 ```
+
+
+
+
+
 
 ```{r}
 Presentation %>%
