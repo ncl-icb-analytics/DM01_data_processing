@@ -7,6 +7,8 @@ library(NCLRtemplates)
 library(officer)
 library(xtable)
 library(gt)
+library(odbc)
+library(DBI)
 
 # Themes??? ----
 # using NCL for now - but should label providers with specific colours for consistency
