@@ -321,7 +321,9 @@ data_wide <- inhealth_data %>%
   pivot_wider(names_from = Week, values_from = Activity, values_fill = 0) %>%
   ungroup()
 
-
+# Define the path for the temporary HTML file and the image file
+html_file <- tempfile(fileext = ".html")
+png_file <- tempfile(fileext = ".png")
 
 
 # Convert data_wide to gt table
@@ -348,10 +350,19 @@ gt_table <- inhealth_data %>%
   )
 
 
-
 gt_table2 <- create_wide_table(data_wide, "Activity Numbers")
 
-print(gt_table2)
+
+gtsave(gt_table2, html_file)
+
+webshot(html_file, file = png_file)
+
+
+Presentation <- Presentation %>%
+  add_slide(layout = "Title and Content", master = "Office Theme") %>%
+  ph_with(value = external_img(png_file), location = ph_location_label(ph_label = "Content Placeholder 2"))
+
+
 ```
 
 
