@@ -136,15 +136,18 @@ plot = ggplot(aggregated_data, aes(x=Date, y = Over_Six, label = paste0(Over_Six
     sec.axis = sec_axis(~./coeff, name="%")
   ) + 
   theme_nclicb()+
-  ggtitle('Whatever this is supposed to show...')+
+  ggtitle('Total Endoscopy Waiting List')+
   theme(legend.position = 'none',
-          text = element_text(size = 40)
+          text = element_text(size = 40, face = "bold"),
+        plot.title = element_text(size = 50, face = "bold")
          )
 
+print(plot)
 
 # Embed data in slide
 Presentation <- Presentation %>%
   add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
+  ph_with(value = "Endoscopy performance", location = ph_location_type(type = "title")) %>% 
   ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 2"))
 
 ```
@@ -162,7 +165,11 @@ aggregated_data = filtered_data %>%
   ungroup() 
 
 # Plot data
-plot = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagnostic 6+ Week waits per provider')
+plot = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagnostic 6+ Week waits per provider')+
+  theme(legend.position = 'none',
+          text = element_text(size = 40, face = "bold"),
+        plot.title = element_text(size = 50, face = "bold")
+         )
 
 # Embed data in slide
 Presentation <- Presentation%>% 
@@ -213,13 +220,15 @@ plot = ggplot(aggregated_data, aes(x=Date, y = Over_Six, label = paste0(Over_Six
   theme_nclicb()+
   ggtitle('NCL Diagnostic Performance - Actual and Wating %')+
   theme(legend.position = 'none',
-          text = element_text(size = 40)
+          text = element_text(size = 40, face = "bold"), 
+        plot.title = element_text(size = 50, face = "bold")
          )
 
 
 # Embed data in slide
 Presentation <- Presentation %>%
   add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
+  ph_with(value = "Imaging Performance", location = ph_location_type(type = "title")) %>%
   ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 2"))
 
 
@@ -232,7 +241,12 @@ aggregated_data = imaging_data %>%
   ungroup() 
 
 # Plot data
-plot = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagnostic 6+ Week waits per provider')
+plot = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagnostic 6+ Week waits per provider') +
+  theme(legend.position = 'none',
+          text = element_text(size = 40, face = "bold"), 
+        plot.title = element_text(size = 50, face = "bold")
+         )
+
 
 Presentation <- Presentation%>% 
   ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 3"))
@@ -273,8 +287,9 @@ summary_table <- xtable(final_table)
 
 # Add table to ppt
 Presentation <- Presentation %>%
-  add_slide(layout = "Image Style 1", master = "Content Slide White")  %>%
-  ph_with(value = final_table, location = ph_location_label(ph_label = "Graphic 5"))
+  add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
+  ph_with(value = "Imaging Backlog", location = ph_location_type(type = "title")) %>% 
+  ph_with(value = summary_table, location = ph_location_label(ph_label = "Content Placeholder 2"))
 
 ```
 
@@ -305,7 +320,11 @@ Presentation <- Presentation %>%
   ph_with(value = prov_plot, location = ph_location_label(ph_label = "Content Placeholder 2"))
 
 prov_plot2 = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagnostic 6+ Week waits per provider') +
-  facet_wrap(~ Provider)
+  facet_wrap(~ Provider) +
+  theme(legend.position = 'none',
+          text = element_text(size = 40, face = "bold"), 
+        plot.title = element_text(size = 50, face = "bold")
+         )
 
 Presentation <- Presentation%>% 
   ph_with(value = prov_plot2, location = ph_location_label(ph_label = "Content Placeholder 3"))
@@ -323,9 +342,17 @@ inhealth_data <- inhealth_data %>%
          Description == 'total')
 
 inh_plot <- line_plot_time(inhealth_data, Speciality, 'Number of cases', 'Wait by provider_') +
-  facet_wrap(~ Speciality)
+  facet_wrap(~ Speciality) +
+  theme(legend.position = 'none',
+          text = element_text(size = 40, face = "bold"), 
+        plot.title = element_text(size = 50, face = "bold")
+         )
 
-print(inh_plot)
+Presentation <- Presentation %>%
+  add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
+  ph_with(value = "InHealth Performance", location = ph_location_type(type = "title")) %>% 
+  ph_with(value = inh_plot, location = ph_location_label(ph_label = "Content Placeholder 2"))
+
 ```
 
 #### Creating a table for InHealth data
@@ -340,10 +367,6 @@ data_wide <- inhealth_data %>%
   summarize(Activity = sum(Activity), .groups = 'drop') %>%
   pivot_wider(names_from = Week, values_from = Activity, values_fill = 0) %>%
   ungroup()
-
-# Define the path for the temporary HTML file and the image file
-html_file <- tempfile(fileext = ".html")
-png_file <- tempfile(fileext = ".png")
 
 
 # Convert data_wide to gt table
@@ -372,15 +395,11 @@ gt_table <- inhealth_data %>%
 
 gt_table2 <- create_wide_table(data_wide, "Activity Numbers")
 
-
-gtsave(gt_table2, html_file)
-
-webshot(html_file, file = png_file)
+gt_table2 |> gtsave("gt_table2.png", expand = 10)
 
 
 Presentation <- Presentation %>%
-  add_slide(layout = "Title and Content", master = "Office Theme") %>%
-  ph_with(value = external_img(png_file), location = ph_location_label(ph_label = "Content Placeholder 2"))
+  ph_with(external_img("gt_table2.png", width = 5, height = 3), location = ph_location_label(ph_label = "Content Placeholder 2"))
 
 
 ```
@@ -421,6 +440,15 @@ aggregate_sentences <- lapply(1:nrow(aggregate_data), function(i) {
 
 
 print(aggregate_sentences)
+
+# Add a slide
+Presentation <- Presentation %>%
+  add_slide(layout = "Style 1", master = "Section Slide") %>%
+
+# Add sentences to the slide using purrr::walk
+walk(aggregate_sentences, ~ {
+  Presentation <<- ph_with(Presentation, value = .x, location = ph_location_type(type = "Text Placeholder 6"))
+})
 
 ```
 
@@ -503,7 +531,16 @@ generate_sentences <- function(data) {
 
 # Generate sentences for the sample data
 sentences_list <- generate_sentences(aggregated_data)
-print(sentences_list)
+
+
+
+
+Presentation <- Presentation %>%
+  add_slide(layout = "Style 2", master = "Section Slide")  
+
+for (sentence in sentences_list) {
+  Presentation <- ph_with(Presentation, value = fpar(ftext(sentence, prop = fp_text(font.size = 12))), location = ph_location_type(type = "Text Placeholder 6"))
+}
 
 ```
 
