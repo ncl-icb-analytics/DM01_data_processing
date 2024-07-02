@@ -182,7 +182,6 @@ upload_combined_data <- function(con, combined_data) {
 
 
 
-
 ```
 
 
@@ -190,5 +189,12 @@ upload_combined_data <- function(con, combined_data) {
 ```{r}
 
 upload_combined_data(con, combined_data)
+
+```
+
+
+```{r}
+
+dbDisconnect(con)
 
 ```

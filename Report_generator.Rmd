@@ -44,17 +44,37 @@ template_presentation <- read_pptx('input/template.pptx')
 
 ```{r}
 
-# Retrieve data from the desired table
+con <- dbConnect(odbc::odbc(), 
+                 dsn = "SANDPIT",
+                 database = "Data_Lab_NCL",
+                 TrustedConnection = TRUE)
+
+
+# Parameters from header
+start_date <- (params$report_date)
+end_date <- start_date + params$duration
+
+# Retrieve data from the table
 
 # data <- dbReadTable(con, "table_name")
 
 
 # Code for executing a specific query instead - commented out
 
-# query <- "SELECT * FROM table_name WHERE specific_date = date"
+# Construct the SQL query using string concatenation
 
-# data <- dbGetQuery(con, query)
+query <- paste0("
+  SELECT *
+  FROM table_name
+  WHERE ReportDate BETWEEN '", start_date, "' AND '", end_date, "'
+  ORDER BY ReportDate DESC
+")
 
+# Execute the query and retrieve the data
+data <- dbGetQuery(con, query)
+
+# Close the database connection
+dbDisconnect(con)
 ```
 
 
