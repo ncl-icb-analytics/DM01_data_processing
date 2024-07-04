@@ -267,7 +267,7 @@ filtered_data2 <- imaging_data %>%
 data_summary <- filtered_data2 %>%
   group_by(Provider, Speciality) %>%
   summarize(Total_Activity = sum(Activity, na.rm = TRUE), .groups = 'drop') %>%
-  pivot_wider(names_from = Speciality, values_from = Total_Activity, values_fill = 0)
+  pivot_wider(names_from = Speciality, values_from = Total_Activity, values_fill = list(Total_Activity = 0))
 
 # Calculate the total row
 total_row <- data_summary %>%
@@ -282,14 +282,55 @@ data_percentage <- data_summary %>%
 final_table <- bind_rows(data_percentage, total_row) %>%
   mutate(across(where(is.numeric), ~ ifelse(Provider == "NCL", ., sprintf("%.2f%%", .))))
 
+summary_table <- final_table %>%
+  gt() %>%
+  tab_header(
+    title = "Imaging Backlog by Provider",
+    subtitle = "% of total backlog"
+  ) %>%
+  fmt_number(
+    columns = c(-Provider),
+    decimals = 1,
+    use_seps = TRUE
+  ) %>%
+  cols_label(
+    `Provider` = "Provider",
+    `Computed Tomography` = "Computed Tomography",
+    `DEXA Scan` = "DEXA Scan",
+    `Magnetic Resonance Imaging` = "Magnetic Resonance Imaging",
+    `Non-obstetric Ultrasound` = "Non-obstetric Ultrasound"
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_body(rows = Provider == "NCL")
+  ) %>%
+  tab_style(
+    style = list(cell_fill(color = "#5757B552"), cell_borders(sides = "left", color = "black", weight = px(1))),
+    locations = cells_body()
+  ) %>%
+  tab_style(
+    style = list(cell_fill(color = "#5656B3"), cell_text(color = "white", weight = "bold")),
+    locations = cells_column_labels()
+  ) %>%
+  tab_style(
+    style = cell_borders(sides = "left", color = "black", weight = px(1)),
+    locations = cells_body()
+  ) %>% 
+  tab_style(
+    style = cell_borders(sides = "right", color = "black", weight = px(1)),
+    locations = cells_body(columns = vars(`Non-obstetric Ultrasound`))
+  )
 
-summary_table <- xtable(final_table)
+print(summary_table)
+
+summary_table |> gtsave("summary_table.png", expand = 10)
+
 
 # Add table to ppt
 Presentation <- Presentation %>%
   add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
   ph_with(value = "Imaging Backlog", location = ph_location_type(type = "title")) %>% 
-  ph_with(value = summary_table, location = ph_location_label(ph_label = "Content Placeholder 2"))
+  ph_with(external_img("summary_table.png", width = 10, height = 3), location = ph_location_label(ph_label = "Content Placeholder 2"))
 
 ```
 
@@ -385,7 +426,7 @@ gt_table <- inhealth_data %>%
   ) %>%
   tab_style(
     style = list(
-      cell_fill(color = "lightblue")
+      cell_fill(color = "#1B9B9D")
     ),
     locations = cells_body(
       columns = starts_with("202")
@@ -399,8 +440,7 @@ gt_table2 |> gtsave("gt_table2.png", expand = 10)
 
 
 Presentation <- Presentation %>%
-  ph_with(external_img("gt_table2.png", width = 5, height = 3), location = ph_location_label(ph_label = "Content Placeholder 2"))
-
+  ph_with(external_img("gt_table2.png", width = 10, height = 3), location = ph_location_label(ph_label = "Content Placeholder 2"))
 
 ```
 
@@ -533,10 +573,8 @@ generate_sentences <- function(data) {
 sentences_list <- generate_sentences(aggregated_data)
 
 
-
-
 Presentation <- Presentation %>%
-  add_slide(layout = "Style 2", master = "Section Slide")  
+  add_slide(layout = "Style 2", master = "Section Slide")
 
 for (sentence in sentences_list) {
   Presentation <- ph_with(Presentation, value = fpar(ftext(sentence, prop = fp_text(font.size = 12))), location = ph_location_type(type = "Text Placeholder 6"))
@@ -546,7 +584,11 @@ for (sentence in sentences_list) {
 
 
 
+```{r}
 
+
+
+```
 
 
 ```{r}
