@@ -142,7 +142,6 @@ plot = ggplot(aggregated_data, aes(x=Date, y = Over_Six, label = paste0(Over_Six
         plot.title = element_text(size = 50, face = "bold")
          )
 
-print(plot)
 
 # Embed data in slide
 Presentation <- Presentation %>%
@@ -224,7 +223,6 @@ plot = ggplot(aggregated_data, aes(x=Date, y = Over_Six, label = paste0(Over_Six
         plot.title = element_text(size = 50, face = "bold")
          )
 
-print(plot)
 
 # Embed data in slide
 Presentation <- Presentation %>%
@@ -322,7 +320,6 @@ summary_table <- final_table %>%
     locations = cells_body(columns = vars(`Non-obstetric Ultrasound`))
   )
 
-print(summary_table)
 
 summary_table |> gtsave("summary_table.png", expand = 10)
 
@@ -373,6 +370,10 @@ Presentation <- Presentation %>%
 ## Inhealth Performance
 
 ```{r}
+inhealth_data <- filter_plot_data(data = data, provider = 'InHealth', indicator = 'diagnostic_waiting_list', report_date = params$report_date, duration = params$duration + 60)
+inhealth_data <- inhealth_data %>% 
+  filter(Speciality == c('Magnetic Resonance Imaging', 'Non-obstetric Ultrasound', 'DEXA Scan', 'Cardiology - Echocardiography'), 
+         Description == 'total')
 
 inh_plot = ggplot(inhealth_data, aes(y = Activity, x = Date, color = Speciality)) +
   geom_line(na.rm = TRUE) +
@@ -434,12 +435,12 @@ gt_table <- data_wide %>%
     ),
     locations = cells_body(
       columns = vars(-Speciality)
-    )
+    ) 
+  ) %>%
+  tab_options(
+    table.font.size = px(8) # Set the font size to 10px
   )
 
-
-
-gt_table2 <- create_wide_table(data_wide, "Activity Numbers")
 
 gt_table |> gtsave("gt_table.png", expand = 10)
 
