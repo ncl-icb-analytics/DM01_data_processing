@@ -203,7 +203,7 @@ aggregated_data = imaging_data %>%
          Prop_over_six = round(Over_Six/Total*100,0)) 
 
 # Plot data
-coeff <- 40
+coeff <- 300
 
 plot = ggplot(aggregated_data, aes(x=Date, y = Over_Six, label = paste0(Over_Six, '\n(', Prop_over_six, '%)'))) +
   geom_bar( stat="identity", fill =  "#1B9B9D") + 
@@ -218,12 +218,13 @@ plot = ggplot(aggregated_data, aes(x=Date, y = Over_Six, label = paste0(Over_Six
     sec.axis = sec_axis(~./coeff, name="%")
   ) + 
   theme_nclicb()+
-  ggtitle('NCL Diagnostic Performance - Actual and Wating %')+
+  ggtitle('Diagnostic - Actual and Wating %')+
   theme(legend.position = 'none',
           text = element_text(size = 40, face = "bold"), 
         plot.title = element_text(size = 50, face = "bold")
          )
 
+print(plot)
 
 # Embed data in slide
 Presentation <- Presentation %>%
@@ -353,22 +354,18 @@ prov_plot = ggplot(aggregated_data, aes(y = Activity, x = Date, color = Provider
   ) +
   facet_wrap(~ Provider) +
   theme_nclicb() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(legend.position = 'none',
+        text = element_text(size = 30, face = "bold"), 
+        plot.title = element_text(size = 50, face = "bold"),
+        axis.text.x = element_text(angle = 35, hjust = 1)) +
   scale_colour_ncl() 
+
 
 Presentation <- Presentation %>%
   add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
+  ph_with(value = "Waiting list trend by Provider", location = ph_location_type(type = "title")) %>% 
   ph_with(value = prov_plot, location = ph_location_label(ph_label = "Content Placeholder 2"))
 
-prov_plot2 = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagnostic 6+ Week waits per provider') +
-  facet_wrap(~ Provider) +
-  theme(legend.position = 'none',
-          text = element_text(size = 40, face = "bold"), 
-        plot.title = element_text(size = 50, face = "bold")
-         )
-
-Presentation <- Presentation%>% 
-  ph_with(value = prov_plot2, location = ph_location_label(ph_label = "Content Placeholder 3"))
 ```
 
 
@@ -376,18 +373,24 @@ Presentation <- Presentation%>%
 ## Inhealth Performance
 
 ```{r}
-inhealth_data <- filter_plot_data(data = data, provider = 'InHealth', indicator = 'diagnostic_waiting_list', report_date = params$report_date, duration = params$duration + 60)
 
-inhealth_data <- inhealth_data %>% 
-  filter(Speciality == c('Magnetic Resonance Imaging', 'Non-obstetric Ultrasound', 'DEXA Scan', 'Cardiology - Echocardiography'), 
-         Description == 'total')
-
-inh_plot <- line_plot_time(inhealth_data, Speciality, 'Number of cases', 'Wait by provider_') +
+inh_plot = ggplot(inhealth_data, aes(y = Activity, x = Date, color = Speciality)) +
+  geom_line(na.rm = TRUE) +
+  geom_point(na.rm = TRUE) +
+  scale_x_date(date_breaks = "1 week", date_labels = "%d-%m-%Y") +
+  labs(
+    title = "Waiting List by Modality",
+    x = "Date"
+  ) +
   facet_wrap(~ Speciality) +
+  theme_nclicb() +
   theme(legend.position = 'none',
-          text = element_text(size = 40, face = "bold"), 
-        plot.title = element_text(size = 50, face = "bold")
-         )
+        text = element_text(size = 30, face = "bold"), 
+        plot.title = element_text(size = 50, face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_colour_ncl() 
+
+
 
 Presentation <- Presentation %>%
   add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
@@ -403,192 +406,147 @@ Presentation <- Presentation %>%
 
 # Pivot the data to wide format
 data_wide <- inhealth_data %>%
-  mutate(Week = lubridate::floor_date(Date, "week")) %>%
-  group_by(Provider, Speciality, Week) %>%
+  mutate(Week = floor_date(Date, "week")) %>%
+  group_by(Speciality, Week) %>%
   summarize(Activity = sum(Activity), .groups = 'drop') %>%
-  pivot_wider(names_from = Week, values_from = Activity, values_fill = 0) %>%
+  pivot_wider(names_from = Week, values_from = Activity, values_fill = list(Activity = 0)) %>%
   ungroup()
 
+# Convert date columns to desired format using lubridate and dplyr
+colnames(data_wide)[-1] <- format(as.Date(colnames(data_wide)[-1]), "%d-%m-%y")
 
 # Convert data_wide to gt table
-gt_table <- inhealth_data %>%
+gt_table <- data_wide %>%
   gt() %>%
   tab_header(
     title = "Activity Numbers"
   ) %>%
   cols_label(
-    Provider = "Provider",
     Speciality = "Speciality"
   ) %>%
   fmt_number(
-    columns = starts_with("202"),
+    columns = vars(-Speciality),
     decimals = 0
   ) %>%
   tab_style(
     style = list(
-      cell_fill(color = "#1B9B9D")
+      cell_fill(color = "lightgrey")
     ),
     locations = cells_body(
-      columns = starts_with("202")
+      columns = vars(-Speciality)
     )
   )
+
 
 
 gt_table2 <- create_wide_table(data_wide, "Activity Numbers")
 
-gt_table2 |> gtsave("gt_table2.png", expand = 10)
+gt_table |> gtsave("gt_table.png", expand = 10)
 
 
 Presentation <- Presentation %>%
-  ph_with(external_img("gt_table2.png", width = 10, height = 3), location = ph_location_label(ph_label = "Content Placeholder 2"))
+  ph_with(external_img("gt_table.png", width = 10, height = 3), location = ph_location_label(ph_label = "Content Placeholder 3"))
+
 
 ```
 
 
 
-## Code for automation of generic information
+
+# Imaging sentences 
 
 
-```{r}
-
-# Aggregate data by Date
-aggregate_data <- aggregated_data %>%
-  group_by(Date) %>%
-  summarise(
-    TotalActivity = sum(Activity),
-    AverageActivity = mean(Activity),
-    MaxActivity = max(Activity)
-  ) %>%
-  arrange(Date) %>%
-  ungroup()
-
-# Function to generate aggregate sentence
-generate_aggregate_sentence <- function(df) {
-  sentences <- paste(
-    "For the week ending", format(df$Date, "%d/%m/%Y"),
-    ", the total activity was", df$TotalActivity,
-    "with an average activity of", df$AverageActivity,
-    "and a maximum activity of", df$MaxActivity, "."
-  )
-  return(sentences)
-}
-
-# Generate aggregate sentences
-aggregate_sentences <- lapply(1:nrow(aggregate_data), function(i) {
-  generate_aggregate_sentence(aggregate_data[i, ])
-})
-
-
-print(aggregate_sentences)
-
-# Add a slide
-Presentation <- Presentation %>%
-  add_slide(layout = "Style 1", master = "Section Slide") %>%
-
-# Add sentences to the slide using purrr::walk
-walk(aggregate_sentences, ~ {
-  Presentation <<- ph_with(Presentation, value = .x, location = ph_location_type(type = "Text Placeholder 6"))
-})
-
-```
-
-
-#### Imaging sentences 
+### Look-up Table for Sentence Generation
 
 ```{r}
 
-# Filter data
-filtered_data = filter_plot_data(data = data, speciality_group = 'Imaging', report_date = params$report_date, duration = params$duration +600)
+filtered_data2 <- data %>% 
+  filter(Speciality_Group == 'Imaging' , 
+         Description == 'total', 
+         Indicator == 'activity')
 
-# Calculate metric
-aggregated_data = filtered_data %>%
-  filter(Indicator %in% c('diagnostic_waiting_list', 'wait_list'), 
-         !str_detect(Description, 'tci')) %>%
-  mutate(
-    Length = case_when(
-      Description == 'total' ~ 'Over_Six',
-      str_detect(Description, 'weeks') ~ 'Under_Six'
-    )
-  ) %>%
-  group_by(Date, Length) %>%
-  summarise(Activity = sum(Activity)) %>%
-  ungroup() %>%
-  pivot_wider(id_cols = Date, names_from = Length, values_from = Activity) %>%
-  mutate(Total = Over_Six + Under_Six,
-         Prop_over_six = round(Over_Six/Total*100,0)) 
+# Parameter for report date
+report_date <- as.Date("2024-05-19")
 
-
-
-
-
-# Function to generate sentences
-generate_sentences <- function(data) {
-  # Ensure data is sorted by Date
-  data <- data %>% arrange(Date)
-  
-  # Calculate changes
+# Function to generate lookup table
+generate_lookup_table <- function(data, report_date) {
   data <- data %>%
-    mutate(
-      PreviousWeekTotal = lag(Total),
-      TotalChange = Total - PreviousWeekTotal,
-      TotalChangePercent = (TotalChange / PreviousWeekTotal) * 100,
-      
-      PreviousWeekOverSix = lag(Over_Six),
-      OverSixChange = Over_Six - PreviousWeekOverSix,
-      OverSixChangePercent = (OverSixChange / PreviousWeekOverSix) * 100,
-      
-      PreviousWeekPropOverSix = lag(Prop_over_six),
-      PropOverSixChange = Prop_over_six - PreviousWeekPropOverSix
-    ) %>%
-    filter(!is.na(PreviousWeekTotal))  # Remove rows where PreviousWeekTotal is NA
+    filter(Indicator == 'activity') %>%
+    group_by(Speciality_Group, Date) %>%
+    summarise(Total_Activity = sum(Activity), .groups = 'drop') %>%
+    ungroup()
   
-  # Get the latest week data
-  latest_week_data <- data %>%
-    filter(Date == max(Date))
+  time_periods <- c(7, 42, 365)
   
-  # Determine the wording based on the change
-  total_change_word <- ifelse(latest_week_data$TotalChange >= 0, "increased", "decreased")
-  over_six_change_word <- ifelse(latest_week_data$OverSixChange >= 0, "increased", "decreased")
+  lookup_table <- data.frame()
   
-  # Generate sentences for the latest week
-  sentences <- list(
-    paste("For the week ending", format(latest_week_data$Date, "%d/%m/%Y"), ", the total imaging waiting list", total_change_word, "by",
-          format(abs(latest_week_data$TotalChange), big.mark = ",", scientific = FALSE), "to",
-          format(latest_week_data$Total, big.mark = ",", scientific = FALSE), 
-          "(", ifelse(latest_week_data$TotalChangePercent > 0, "+", ""), 
-          round(latest_week_data$TotalChangePercent, 1), "%) compared to the previous week."),
+  for (time_period in time_periods) {
+    past_date <- report_date - days(time_period)
     
-    paste("The number of patients waiting over 6 weeks", over_six_change_word, "by", 
-          format(abs(latest_week_data$OverSixChange), big.mark = ",", scientific = FALSE), "to", 
-          format(latest_week_data$Over_Six, big.mark = ",", scientific = FALSE), ". Over 6-week wait, performance", 
-          ifelse(latest_week_data$OverSixChangePercent >= 0, "increased", "decreased"), "by",
-          round(abs(latest_week_data$OverSixChangePercent), 1), "% to",
-          round(latest_week_data$Prop_over_six, 1), "%.")
-  )
+    current_activity <- data %>%
+      filter(Date == report_date) %>%
+      select(Speciality_Group, Total_Activity) %>%
+      rename(Current_Activity = Total_Activity)
+    
+    past_activity <- data %>%
+      filter(Date == past_date) %>%
+      select(Speciality_Group, Total_Activity) %>%
+      rename(Past_Activity = Total_Activity)
+    
+    activity_comparison <- current_activity %>%
+      left_join(past_activity, by = "Speciality_Group") %>%
+      mutate(
+        Activity_Difference = Current_Activity - Past_Activity,
+        Percent_Difference = (Activity_Difference / Past_Activity) * 100,
+        Level = ifelse(Activity_Difference > 0, "increase", "decrease"),
+        Date = report_date,
+        Time_Period = paste(time_period, "days")
+      )
+    
+    lookup_table <- bind_rows(lookup_table, activity_comparison)
+  }
   
-  return(sentences)
+  lookup_table <- lookup_table %>%
+    select(Speciality_Group, Date, Time_Period, Activity_Difference, Percent_Difference, Level)
+  
+  return(lookup_table)
 }
 
-# Generate sentences for the sample data
-sentences_list <- generate_sentences(aggregated_data)
+# Generate lookup table
+lookup_table <- generate_lookup_table(filtered_data2, report_date)
+print(lookup_table)
 
 
-Presentation <- Presentation %>%
-  add_slide(layout = "Style 2", master = "Section Slide")
-
-for (sentence in sentences_list) {
-  Presentation <- ph_with(Presentation, value = fpar(ftext(sentence, prop = fp_text(font.size = 12))), location = ph_location_type(type = "Text Placeholder 6"))
-}
 
 ```
 
-
-
+### Generating Sentences
 ```{r}
 
+generate_sentences <- function(lookup_table) {
+  sentences_list <- lookup_table %>%
+    rowwise() %>%
+    mutate(
+      Sentence = str_glue(
+        "For the week ending {format(Date, '%d/%m/%Y')}, the total activity {Level} by {format(abs(Activity_Difference), big.mark = ',')} ({sprintf('%.2f', abs(Percent_Difference))}%) over the last {Time_Period}."
+      )
+    ) %>%
+    pull(Sentence)
+  
+  return(sentences_list)
+}
 
+# Generate sentences
+sentences_list <- generate_sentences(lookup_table)
+print(sentences_list)
+
+Presentation <- Presentation %>%
+  add_slide(layout = "Image and Column Style 2", master = "Content Slide White")  %>%
+  ph_with(value = "Key Points", location = ph_location_type(type = "title")) %>% 
+  ph_with(value = sentences_list[[1]], location = ph_location_type(type = "Text Placeholder 3"))
 
 ```
+
 
 
 ```{r}
