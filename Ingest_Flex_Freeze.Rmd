@@ -123,6 +123,29 @@ combined_data<- combined_data %>%
 ```
 
 
+### Adding Column for week number
+
+```{r}
+
+
+# Calculate week number based on financial year starting in April
+combined_data <- combined_data %>%
+  mutate(
+    FiscalYearStart = make_date(year(ReportDate), 4, 1),
+    WeekNumber = if_else(
+      month(ReportDate) < 4,
+      week(ReportDate) - week(FiscalYearStart) + 53,
+      week(ReportDate) - week(FiscalYearStart) + 1
+    ),
+    WeekNumber = paste("Week", WeekNumber) 
+  ) %>%
+  select(-FiscalYearStart) 
+
+
+```
+
+
+
 ## Creating Intermediate Excel File for QA
 ```{r}
 
