@@ -4,7 +4,7 @@ author: "Arush Mohan"
 date: "`r Sys.Date()`"
 output: html_document
 params:
-  report_date: 20240609
+  report_date: 20240623
   freeze_window: 7
 ---
 
@@ -122,6 +122,8 @@ combined_data<- combined_data %>%
   #left_join(speciality_grouping) # adding context # commented out, should be added in visualisation only
 ```
 
+
+## Creating Intermediate Excel File for QA
 ```{r}
 
 # Write combined dataset to a new Excel file
@@ -131,68 +133,125 @@ write_xlsx(combined_data, paste0('output/', "combined_dataset_", as.Date(params$
 
 
 
-## Add upload to sandpit sections - override for freeze, simple upload for flex
+## Upload to sandpit sections - override for freeze, simple upload for flex
 ```{r}
 
-# delete last week and upload all?
-#The function will replace last week's flex data with freeze data and append the new flex data
+# Connecting to the Sandpit
 
 con <- dbConnect(odbc::odbc(), 
                  dsn = "SANDPIT",
                  database = "Data_Lab_NCL",
                  TrustedConnection = TRUE)
+```
 
-upload_combined_data <- function(con, combined_data) {
-  # Begin a transaction
-  dbBegin(con)
-  
+
+### Checking for dulicates and uploding to Sandpit
+```{r}
+
+# Begin a transaction
+dbBegin(con)
+
+# Error handling 
+tryCatch({
+
   # Separate the data into flex and freeze
   flex_data <- combined_data %>% filter(DataType == "flex")
   freeze_data <- combined_data %>% filter(DataType == "freeze")
   
-  # Replace existing flex data with freeze data based on provider_name and ReportDate
-  for (i in 1:nrow(freeze_data)) {
-    provider <- freeze_data$provider_name[i]
-    report_date <- freeze_data$ReportDate[i]
+  # Check for existing records 
+  if (nrow(freeze_data) > 0) {
+    unique_freeze_entries <- freeze_data %>%
+      select(provider_name, ReportDate) %>%
+      distinct()
     
-    # Check if there is matching flex data in the database
-    existing_flex <- dbGetQuery(con, 
-                                paste("SELECT COUNT(*) FROM [Data_Lab_NCL].[MohanA].[DashboardTest] 
-                                       WHERE DataType = 'flex' AND provider_name = '", provider, 
-                                       "' AND ReportDate = '", report_date, "'", sep = ""))
+    # SQL IN clause strings for freeze data
+    freeze_provider_names <- paste0("'", unique_freeze_entries$provider_name, "'", collapse = ", ")
+    freeze_report_dates <- paste0("'", unique_freeze_entries$ReportDate, "'", collapse = ", ")
+
+    # Query to check for existing freeze data
+    freeze_query <- sprintf(
+      "SELECT provider_name, ReportDate FROM [Data_Lab_NCL].[MohanA].[DashboardTest] 
+       WHERE DataType = 'freeze' AND provider_name IN (%s) AND ReportDate IN (%s)",
+      freeze_provider_names, freeze_report_dates
+    )
     
-    # If there is matching flex data, delete it
-    if (existing_flex[1, 1] > 0) {
-      delete_statement <- paste("DELETE FROM [Data_Lab_NCL].[MohanA].[DashboardTest] 
-                                 WHERE DataType = 'flex' AND provider_name = '", provider, 
-                                 "' AND ReportDate = '", report_date, "'", sep = "")
-      dbSendStatement(con, delete_statement) %>% dbClearResult()
+    existing_freeze_data <- dbGetQuery(con, freeze_query)
+    
+    # If existing freeze data is found raise an error
+    if (nrow(existing_freeze_data) > 0) {
+      stop(sprintf(
+        "Duplicate freeze data found for provider_name(s): %s on ReportDate(s): %s.",
+        paste(existing_freeze_data$provider_name, collapse = ", "),
+        paste(existing_freeze_data$ReportDate, collapse = ", ")
+      ))
     }
   }
   
-  # Upload the freeze data to the database
-  dbWriteTable(con, Id(schema = "MohanA", table = "DashboardTest"), freeze_data, append = TRUE, row.names = FALSE)
-  
-  # Upload the new flex data to the database
-  dbWriteTable(con, Id(schema = "MohanA", table = "DashboardTest"), flex_data, append = TRUE, row.names = FALSE)
-  
+  # Check for existing records in flex data
+  if (nrow(flex_data) > 0) {
+    unique_flex_entries <- flex_data %>%
+      select(provider_name, ReportDate) %>%
+      distinct()
+
+    # SQL IN clause strings for flex data
+    flex_provider_names <- paste0("'", unique_flex_entries$provider_name, "'", collapse = ", ")
+    flex_report_dates <- paste0("'", unique_flex_entries$ReportDate, "'", collapse = ", ")
+
+    # Query to check for existing flex data
+    flex_query <- sprintf(
+      "SELECT provider_name, ReportDate FROM [Data_Lab_NCL].[MohanA].[DashboardTest] 
+       WHERE DataType = 'flex' AND provider_name IN (%s) AND ReportDate IN (%s)",
+      flex_provider_names, flex_report_dates
+    )
+    
+    existing_flex_data <- dbGetQuery(con, flex_query)
+
+    # If existing flex data is found raise an error
+    if (nrow(existing_flex_data) > 0) {
+      stop(sprintf(
+        "Duplicate flex data found for provider_name(s): %s on ReportDate(s): %s.",
+        paste(existing_flex_data$provider_name, collapse = ", "),
+        paste(existing_flex_data$ReportDate, collapse = ", ")
+      ))
+    }
+  }
+
+  # Delete existing flex data 
+  if (nrow(freeze_data) > 0) {
+    delete_statement <- sprintf(
+      "DELETE FROM [Data_Lab_NCL].[MohanA].[DashboardTest] 
+       WHERE DataType = 'flex' 
+       AND provider_name IN (%s)
+       AND ReportDate IN (%s)",
+      freeze_provider_names, freeze_report_dates
+    )
+    dbExecute(con, delete_statement)
+  }
+
+  # Insert freeze data 
+  if (nrow(freeze_data) > 0) {
+    dbAppendTable(con, Id(schema = "MohanA", table = "DashboardTest"), freeze_data)
+  }
+
+  # Insert flex data 
+  if (nrow(flex_data) > 0) {
+    dbAppendTable(con, Id(schema = "MohanA", table = "DashboardTest"), flex_data)
+  }
+
   # Commit the transaction
   dbCommit(con)
-}
-
-
-
-```
-
-
-
-```{r}
-
-upload_combined_data(con, combined_data)
+  
+}, error = function(e) {
+  # Rollback the transaction in case of error
+  dbRollback(con)
+  stop("Transaction failed: ", e$message)
+})
 
 ```
 
 
+
+## Disconnecting from the Sandpit
 ```{r}
 
 dbDisconnect(con)
