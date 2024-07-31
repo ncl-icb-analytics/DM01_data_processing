@@ -171,11 +171,13 @@ combined_data <- combined_data %>%
 
 
 
-## Creating Intermediate Excel File for QA
+## Creating Intermediate Excel Files for QA
 ```{r}
 
 # Write combined dataset to a new Excel file
-write_xlsx(combined_data, paste0('output/', "combined_dataset_", as.Date(params$report_date), ".xlsx"))
+write_xlsx(wide_data, paste0('output/', "wide_dataset_combined_", as.Date(params$report_date), ".xlsx"))
+
+write_xlsx(combined_data, paste0('output/', "long_dataset_combined_", as.Date(params$report_date), ".xlsx"))
 
 ```
 
@@ -326,7 +328,7 @@ tryCatch({
 
     # Query to check for existing freeze data
     freeze_query <- sprintf(
-      "SELECT provider_name, ReportDate FROM [Data_Lab_NCL].[MohanA].[DashboardTestWide] 
+      "SELECT provider_name, ReportDate FROM [Data_Lab_NCL].[diag_dashboard].[wide_data] 
        WHERE DataType = 'freeze' AND provider_name IN (%s) AND ReportDate IN (%s)",
       freeze_provider_names, freeze_report_dates
     )
@@ -355,7 +357,7 @@ tryCatch({
 
     # Query to check for existing flex data
     flex_query <- sprintf(
-      "SELECT provider_name, ReportDate FROM [Data_Lab_NCL].[MohanA].[DashboardTestWide] 
+      "SELECT provider_name, ReportDate FROM [Data_Lab_NCL].[diag_dashboard].[wide_data] 
        WHERE DataType = 'flex' AND provider_name IN (%s) AND ReportDate IN (%s)",
       flex_provider_names, flex_report_dates
     )
@@ -375,7 +377,7 @@ tryCatch({
   # Delete existing flex data
   if (nrow(wide_flex_data) > 0) {
     delete_statement <- sprintf(
-      "DELETE FROM [Data_Lab_NCL].[MohanA].[DashboardTestWide] 
+      "DELETE FROM [Data_Lab_NCL].[diag_dashboard].[wide_data] 
        WHERE DataType = 'flex' 
        AND provider_name IN (%s)
        AND ReportDate IN (%s)",
@@ -386,12 +388,12 @@ tryCatch({
 
   # Insert wide-format freeze data
   if (nrow(wide_freeze_data) > 0) {
-    dbAppendTable(con, Id(schema = "MohanA", table = "DashboardTestWide"), wide_freeze_data)
+    dbAppendTable(con, Id(schema = "diag_dashboard", table = "wide_data"), wide_freeze_data)
   }
 
   # Insert wide-format flex data
   if (nrow(wide_flex_data) > 0) {
-    dbAppendTable(con, Id(schema = "MohanA", table = "DashboardTestWide"), wide_flex_data)
+    dbAppendTable(con, Id(schema = "diag_dashboard", table = "wide_data"), wide_flex_data)
   }
 
   # Commit the transaction
@@ -403,8 +405,7 @@ tryCatch({
   stop("Transaction failed: ", e$message)
 })
 
-# Disconnect from the database
-dbDisconnect(con)
+
 ```
 
 
