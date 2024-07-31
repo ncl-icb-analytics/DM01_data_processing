@@ -112,6 +112,31 @@ combined_data <- file_list %>%
   
 
 ```
+## Pivoting data to wide format for secondary use
+
+```{r}
+
+wide_data <- combined_data %>%
+  pivot_wider(
+    names_from = Indicator,
+    values_from = Activity
+  )
+
+wide_data <- wide_data %>%
+  mutate(
+    FiscalYearStart = make_date(year(ReportDate), 4, 1),
+    WeekNumber = if_else(
+      month(ReportDate) < 4,
+      week(ReportDate) - week(FiscalYearStart) + 53,
+      week(ReportDate) - week(FiscalYearStart) + 1
+    ),
+    WeekNumber = paste("Week", WeekNumber) 
+  ) %>%
+  select(-FiscalYearStart) 
+
+```
+
+
 ## Processing for upload
 ```{r}
 #speciality_grouping <- read_csv('input/grouping.csv') # commented out, should be added in visualisation only
@@ -168,7 +193,7 @@ con <- dbConnect(odbc::odbc(),
 ```
 
 
-### Checking for dulicates and uploding to Sandpit
+### Checking for duplicates and uploading to Sandpit - Long Data
 ```{r}
 
 # Begin a transaction
@@ -272,6 +297,115 @@ tryCatch({
 
 ```
 
+
+
+
+###  Checking for duplicates and uploading to Sandpit - Wide Data
+
+```{r}
+
+# Begin a transaction
+dbBegin(con)
+
+# Error handling
+tryCatch({
+
+  # Separate the wide data into flex and freeze datasets
+  wide_flex_data <- wide_data %>% filter(DataType == "flex")
+  wide_freeze_data <- wide_data %>% filter(DataType == "freeze")
+
+  # Check for existing records in freeze data
+  if (nrow(wide_freeze_data) > 0) {
+    unique_freeze_entries <- wide_freeze_data %>%
+      select(provider_name, ReportDate) %>%
+      distinct()
+
+    # SQL IN clause strings for freeze data
+    freeze_provider_names <- paste0("'", unique_freeze_entries$provider_name, "'", collapse = ", ")
+    freeze_report_dates <- paste0("'", unique_freeze_entries$ReportDate, "'", collapse = ", ")
+
+    # Query to check for existing freeze data
+    freeze_query <- sprintf(
+      "SELECT provider_name, ReportDate FROM [Data_Lab_NCL].[MohanA].[DashboardTestWide] 
+       WHERE DataType = 'freeze' AND provider_name IN (%s) AND ReportDate IN (%s)",
+      freeze_provider_names, freeze_report_dates
+    )
+
+    existing_freeze_data <- dbGetQuery(con, freeze_query)
+
+    # If existing freeze data is found raise an error
+    if (nrow(existing_freeze_data) > 0) {
+      stop(sprintf(
+        "Duplicate freeze data found for provider_name(s): %s on ReportDate(s): %s.",
+        paste(existing_freeze_data$provider_name, collapse = ", "),
+        paste(existing_freeze_data$ReportDate, collapse = ", ")
+      ))
+    }
+  }
+
+  # Check for existing records in flex data
+  if (nrow(wide_flex_data) > 0) {
+    unique_flex_entries <- wide_flex_data %>%
+      select(provider_name, ReportDate) %>%
+      distinct()
+
+    # SQL IN clause strings for flex data
+    flex_provider_names <- paste0("'", unique_flex_entries$provider_name, "'", collapse = ", ")
+    flex_report_dates <- paste0("'", unique_flex_entries$ReportDate, "'", collapse = ", ")
+
+    # Query to check for existing flex data
+    flex_query <- sprintf(
+      "SELECT provider_name, ReportDate FROM [Data_Lab_NCL].[MohanA].[DashboardTestWide] 
+       WHERE DataType = 'flex' AND provider_name IN (%s) AND ReportDate IN (%s)",
+      flex_provider_names, flex_report_dates
+    )
+
+    existing_flex_data <- dbGetQuery(con, flex_query)
+
+    # If existing flex data is found raise an error
+    if (nrow(existing_flex_data) > 0) {
+      stop(sprintf(
+        "Duplicate flex data found for provider_name(s): %s on ReportDate(s): %s.",
+        paste(existing_flex_data$provider_name, collapse = ", "),
+        paste(existing_flex_data$ReportDate, collapse = ", ")
+      ))
+    }
+  }
+
+  # Delete existing flex data
+  if (nrow(wide_flex_data) > 0) {
+    delete_statement <- sprintf(
+      "DELETE FROM [Data_Lab_NCL].[MohanA].[DashboardTestWide] 
+       WHERE DataType = 'flex' 
+       AND provider_name IN (%s)
+       AND ReportDate IN (%s)",
+      flex_provider_names, flex_report_dates
+    )
+    dbExecute(con, delete_statement)
+  }
+
+  # Insert wide-format freeze data
+  if (nrow(wide_freeze_data) > 0) {
+    dbAppendTable(con, Id(schema = "MohanA", table = "DashboardTestWide"), wide_freeze_data)
+  }
+
+  # Insert wide-format flex data
+  if (nrow(wide_flex_data) > 0) {
+    dbAppendTable(con, Id(schema = "MohanA", table = "DashboardTestWide"), wide_flex_data)
+  }
+
+  # Commit the transaction
+  dbCommit(con)
+
+}, error = function(e) {
+  # Rollback the transaction in case of error
+  dbRollback(con)
+  stop("Transaction failed: ", e$message)
+})
+
+# Disconnect from the database
+dbDisconnect(con)
+```
 
 
 ## Disconnecting from the Sandpit
