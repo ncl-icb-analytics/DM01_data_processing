@@ -175,7 +175,7 @@ combined_data <- combined_data %>%
 ```{r}
 
 # Write combined dataset to a new Excel file
-write_xlsx(wide_data, paste0('output/', "wide_dataset_combined_", as.Date(params$report_date), ".xlsx"))
+write_xlsx(wide_data, paste0('output/', "wide_dataset_combined_", ymd(params$report_date), ".xlsx"))
 
 write_xlsx(combined_data, paste0('output/', "long_dataset_combined_", as.Date(params$report_date), ".xlsx"))
 

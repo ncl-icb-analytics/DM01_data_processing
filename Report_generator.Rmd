@@ -3,8 +3,8 @@ title: "Report_generation"
 output: html_document
 date: "2024-06-14"
 params:
-  report_date: 20240501
-  duration: 30
+  report_date: 20240519
+  duration: 365
 ---
 
 ```{r setup, include=FALSE}
@@ -36,6 +36,25 @@ data = read_csv('data/inter.csv')
 
 # Ingest and initiaise blank presentation
 template_presentation <- read_pptx('input/template.pptx') 
+
+```
+### Adding Column for week number
+
+```{r}
+
+# Calculate week number based on financial year starting in April
+data <- data %>%
+  mutate(
+    FiscalYearStart = make_date(year(Date) - if_else(month(Date) < 4, 1, 0), 4, 1),
+    WeekNumber = if_else(
+      month(Date) < 4,
+      week(Date) - week(FiscalYearStart) + 53,
+      week(Date) - week(FiscalYearStart) + 1
+    ),
+    WeekNumber = paste("Week", WeekNumber)
+  ) %>%
+  select(-FiscalYearStart) 
+
 
 ```
 
@@ -91,6 +110,248 @@ Presentation <- template_presentation %>%
   ph_with(my_pres, value = "Diagnostic Weekly Assessment Report", location = ph_location_type(type = "title")) 
 
 ```
+
+
+## NCL Diagnostics - All Tests
+
+### Diagnostics 6+ week wait charts
+
+
+#### Actual and % waiting over 6 weeks
+```{r}
+
+# Filter data
+filtered_data = filter_plot_data(data = data, speciality_group = 'all', report_date = params$report_date, duration = params$duration)
+
+
+aggregated_data <- filtered_data %>%
+  filter(Indicator %in% c('diagnostic_waiting_list', 'wait_list'), 
+         !str_detect(Description, 'tci')) %>%
+  mutate(
+    Length = case_when(
+      Description == 'total' ~ 'Over_Six',
+      str_detect(Description, 'weeks') ~ 'Under_Six'
+    )
+  ) %>%
+  group_by(Date, Length) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = Date, names_from = Length, values_from = Activity) %>%
+  mutate(Total = Over_Six + Under_Six,
+         Prop_over_six = round(Over_Six/Total*100,0)) 
+
+
+# Plot data
+coeff <- 500
+
+plot = ggplot(aggregated_data, aes(x=Date, y = Over_Six, label = paste0(Over_Six, '\n(', Prop_over_six, '%)'))) +
+  geom_bar( stat="identity", fill =  "#1B9B9D") + 
+  geom_text(size = 9, position = position_stack(vjust=0.5), colour = 'white')+
+  geom_line( aes(y=Prop_over_six*coeff), color = "#005EB8", size = 2) +
+   scale_y_continuous(
+    
+    # Features of the first axis
+    name = "Activity",
+    
+    # Add a second axis and specify its features
+    sec.axis = sec_axis(~./coeff, name="%")
+  ) + 
+  theme_nclicb()+
+  ggtitle('Actual and % Waiting over 6 weeks')+
+  theme(legend.position = 'bottom',
+          text = element_text(size = 40, face = "bold"),
+        plot.title = element_text(size = 50, face = "bold")
+         ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  scale_x_date(
+    date_breaks = "1 week",  
+    date_labels = "%d-%b-%Y", 
+    expand = expansion(mult = c(0.01, 0.01))
+  )
+
+Presentation <- Presentation %>%
+  add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
+  ph_with(value = "NCL Diagnostics - All Tests", location = ph_location_type(type = "title")) %>% 
+  ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 2"))
+
+```
+
+
+#### 6+ week waits by Providers
+
+```{r}
+# Filter data
+filtered_data = filter_plot_data(data = data, speciality_group = 'all', indicator = 'diagnostic_waiting_list', report_date = params$report_date, duration = params$duration)
+
+# Calculate metric
+aggregated_data = filtered_data %>%
+  filter(Description == 'total')%>%
+  group_by(Date, Provider) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup() 
+
+# Plot data
+plot = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagnostic 6+ Week waits per provider')+
+  theme(legend.position = 'none',
+          text = element_text(size = 40, face = "bold"),
+        plot.title = element_text(size = 50, face = "bold"), 
+        axis.text.x = element_text(angle = 45, hjust = 1)
+        ) + 
+  scale_x_date(
+    date_breaks = "1 week",  
+    date_labels = "%d-%b-%Y", 
+    expand = expansion(mult = c(0.01, 0.01))
+  )
+  
+
+
+Presentation <- Presentation%>% 
+  ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 3"))
+
+```
+
+#### NCL All Tests Table
+
+
+
+
+## Diagnostics - Activity
+
+### Weekly Scans by Source
+
+```{r}
+# Filter data
+filtered_data = filter_plot_data(data = data, speciality_group = 'all', indicator = 'activity', report_date = params$report_date, duration = params$duration)
+
+filtered_data <- filtered_data %>%
+  filter(Description != 'total')
+
+aggregated_data = filtered_data %>%
+  group_by(Date, Description) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup()
+
+# Plot data
+plot = line_plot_time(aggregated_data, Description, 'Activity', 'Weekly Diagnostic Scans by Source')+
+  theme(legend.position = 'bottom',
+        legend.text = element_text(size = 20),
+        legend.title = element_blank(),
+        text = element_text(size = 40, face = "bold"),
+        plot.title = element_text(size = 50, face = "bold"), 
+        axis.text.x = element_text(angle = 45, hjust = 1)
+        ) +  
+  scale_x_date(
+    date_breaks = "1 week",  
+    date_labels = "%d-%b-%Y"
+  ) +
+  scale_y_continuous(
+    labels = scales::comma,      
+    breaks = seq(0, 15000, by = 5000)
+  )
+  
+
+Presentation <- Presentation %>%
+  add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
+  ph_with(value = "Diagnostics - Activity", location = ph_location_type(type = "title")) %>% 
+  ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 2"))
+
+```
+
+
+### Weekly Diagnostic Scans by Provider
+
+```{r}
+# Filter data
+filtered_data = filter_plot_data(data = data, speciality_group = 'all', indicator = 'activity', report_date = params$report_date, duration = params$duration)
+
+
+# Calculate metric
+aggregated_data = filtered_data %>%
+  filter(Description == 'total')%>%
+  group_by(Date, Provider) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup() 
+
+
+plot = ggplot(aggregated_data, aes(x=Date, y = Activity, fill = Provider)) +
+  geom_bar( stat="identity") + 
+  theme_nclicb()+
+  ggtitle('Weekly Diagnostic Scans by Provider')+
+  theme(legend.position = 'bottom',
+        legend.text = element_text(size = 20),
+        legend.title = element_blank(),
+          text = element_text(size = 40, face = "bold"),
+        plot.title = element_text(size = 50, face = "bold")
+         ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  scale_x_date(
+    date_breaks = "1 week",  
+    date_labels = "%d-%b-%Y", 
+    expand = expansion(mult = c(0.01, 0.01))
+  )
+
+Presentation <- Presentation%>% 
+  ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 3"))
+```
+
+### Weekly Diagnostic activity vs previous year
+
+
+```{r}
+filtered_data = filter_plot_data(data = data, speciality_group = 'all', indicator = 'activity', report_date = params$report_date, duration = params$duration)
+
+
+# Calculate metric
+aggregated_data = filtered_data %>%
+  filter(Description == 'total')%>%
+  group_by(Date, WeekNumber) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup() 
+
+# Extract year for comparison
+aggregated_data <- aggregated_data %>%
+  mutate(
+    Year = year(Date)
+  )
+
+# Separate the data into current and previous years
+current_year <- aggregated_data %>% filter(Year == 2024) %>% select(WeekNumber, Activity) %>% rename(CurrentActivity = Activity)
+previous_year <- aggregated_data %>% filter(Year == 2023) %>% select(WeekNumber, Activity) %>% rename(PreviousActivity = Activity)
+
+# Merge datasets
+comparison_data <- current_year %>%
+  left_join(previous_year, by = "WeekNumber")
+
+# Plot the comparison
+plot <- ggplot(comparison_data, aes(x = WeekNumber)) +
+  geom_line(aes(y = CurrentActivity, color = "Current Year"), size = 1) +
+  geom_line(aes(y = PreviousActivity, color = "Previous Year"), size = 1, linetype = "dashed") +
+  geom_point(aes(y = CurrentActivity, color = "Current Year"), size = 3) +
+  geom_point(aes(y = PreviousActivity, color = "Previous Year"), size = 3) +
+  labs(
+    title = "Weekly Diagnostic activity vs previous year",
+    x = "Date",
+    y = "Activity",
+    color = "Legend"
+  ) +
+  theme_nclicb() +
+  theme(
+    text = element_text(size = 14, face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom"
+  ) +
+  scale_x_discrete(limits = unique(comparison_data$WeekNumber))
+
+
+```
+
+
+
+
 
 ## Endoscopy
 
@@ -169,7 +430,6 @@ plot = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagnostic 
           text = element_text(size = 40, face = "bold"),
         plot.title = element_text(size = 50, face = "bold")
          )
-
 # Embed data in slide
 Presentation <- Presentation%>% 
   ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 3"))
@@ -549,7 +809,7 @@ Presentation <- Presentation %>%
 ```
 
 
-
+# Creating the Presentation as Output
 ```{r}
 Presentation %>%
   print(target = paste0('output/diagnostic_report_data_', params$report_date, '.pptx'))
