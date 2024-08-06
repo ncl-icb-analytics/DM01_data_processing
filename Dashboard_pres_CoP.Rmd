@@ -1,0 +1,223 @@
+---
+title: "Presentation_CoP"
+author: "Arush Mohan"
+date: "`r Sys.Date()`"
+output: powerpoint_presentation
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+source('src/functions.R')
+```
+
+
+## Data and Teplate Setup
+
+```{r}
+
+# Data ingestion
+data = read_csv('data/inter.csv')
+
+# Ingest and initialise blank presentation
+template_presentation <- read_pptx('input/template.pptx') 
+
+```
+
+
+## Title slide
+
+
+```{r}
+
+Presentation <- template_presentation %>%
+  add_slide(layout = "With Image_Date/name one line", master = "Presentation Title Slides") %>%
+  ph_with(my_pres, value = "Performance Dashboard Automation Project", location = ph_location_type(type = "title")) 
+
+```
+
+
+## Context
+
+```{r}
+
+Presentation <- template_presentation %>%
+  add_slide(layout = "Analytics_Text_Slide_Single", master = "Content Slide White") %>%
+  ph_with(value = "Context", location = ph_location_type(type = "title")) %>%
+  ph_with(value = c("The current process of generating presentations and dashboards within the Performance Team is manually intensive and time-consuming.",
+  "This project focuses on the development of an automated pipeline using R.", 
+  "Specifically, the project is focused on the ‘Weekly Diagnostic Dashboard’ and the related PowerPoint presentation"), 
+                location = ph_location_type(ph_label = "Text Placeholder 3"))
+
+```
+
+
+## Business Aims
+
+```{r}
+
+Presentation <- template_presentation %>%
+  add_slide(layout = "Analytics_Text_Slide_Single", master = "Content Slide White") %>%
+  ph_with(value = "Business Aims", location = ph_location_type(type = "title")) %>%
+  ph_with(value = c("Enhance Operational Efficiency
+                      - reduction in time and effort required to produce performance reports
+                      - enable the Performance team to allocate more resources to in-depth analysis",
+  "Improve Data Accuracy and Consistency
+    - automated pipeline can minimize errors and ensure consistent formatting and presentation", 
+  "Increase Flexibility and Scalability
+    - proposed solution can be modified to handle a variety of data sources and reporting requirements
+    - the pipeline can grow with the team’s needs, supporting both current and future projects", 
+  "Standardize Reporting Processes
+    - implementing a standardized approach can ensure consistency across different reports and dashboards
+    - improve the coherence and comparability of data"), 
+                location = ph_location_type(ph_label = "Text Placeholder 3"))
+
+```
+
+
+## Workflow Change
+
+```{r}
+
+Presentation <- template_presentation %>%
+  add_slide(layout = "Analytics_Text_Slide_Single", master = "Content Slide White") %>%
+  ph_with(value = "Workflow Change", location = ph_location_type(type = "title"))
+
+```
+
+
+## Part 1 - Data Ingestion and Tranformation
+
+```{r}
+
+Presentation <- template_presentation %>%
+  add_slide(layout = "Analytics_Text_Slide_Single", master = "Content Slide White") %>%
+  ph_with(value = "Part 1 - Data Ingestion and Tranformation", location = ph_location_type(type = "title")) %>%
+  ph_with(value = c(""), 
+                location = ph_location_type(ph_label = "Text Placeholder 3"))
+
+
+
+```
+
+
+# Creating the Presentation as Output
+```{r}
+Presentation %>%
+  print(target = paste0('output/Dashboard_build_pres_', '.pptx'))
+
+```
+
+
+
+
+## Example Slide
+
+```{r}
+
+# Filter data
+filtered_data = filter_plot_data(data = data, speciality_group = 'all', report_date = params$report_date, duration = params$duration)
+
+
+aggregated_data <- filtered_data %>%
+  filter(Indicator %in% c('diagnostic_waiting_list', 'wait_list'), 
+         !str_detect(Description, 'tci')) %>%
+  mutate(
+    Length = case_when(
+      Description == 'total' ~ 'Over_Six',
+      str_detect(Description, 'weeks') ~ 'Under_Six'
+    )
+  ) %>%
+  group_by(Date, Length) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = Date, names_from = Length, values_from = Activity) %>%
+  mutate(Total = Over_Six + Under_Six,
+         Prop_over_six = round(Over_Six/Total*100,0)) 
+
+
+# Plot data
+coeff <- 500
+
+plot = ggplot(aggregated_data, aes(x=Date, y = Over_Six, label = paste0(Over_Six, '\n(', Prop_over_six, '%)'))) +
+  geom_bar( stat="identity", fill =  "#1B9B9D") + 
+  geom_text(size = 9, position = position_stack(vjust=0.5), colour = 'white')+
+  geom_line( aes(y=Prop_over_six*coeff), color = "#005EB8", size = 2) +
+   scale_y_continuous(
+    
+    # Features of the first axis
+    name = "Activity",
+    
+    # Add a second axis and specify its features
+    sec.axis = sec_axis(~./coeff, name="%")
+  ) + 
+  theme_nclicb()+
+  ggtitle('Actual and % Waiting over 6 weeks')+
+  theme(legend.position = 'bottom',
+          text = element_text(size = 40, face = "bold"),
+        plot.title = element_text(size = 50, face = "bold")
+         ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  scale_x_date(
+    date_breaks = "1 week",  
+    date_labels = "%d-%b-%Y", 
+    expand = expansion(mult = c(0.01, 0.01))
+  )
+
+Presentation <- Presentation %>%
+  add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
+  ph_with(value = "NCL Diagnostics - All Tests", location = ph_location_type(type = "title")) %>% 
+  ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 2"))
+
+
+# Filter data
+filtered_data = filter_plot_data(data = data, speciality_group = 'all', indicator = 'diagnostic_waiting_list', report_date = params$report_date, duration = params$duration)
+
+# Calculate metric
+aggregated_data = filtered_data %>%
+  filter(Description == 'total')%>%
+  group_by(Date, Provider) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup() 
+
+# Plot data
+plot = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagnostic 6+ Week waits per provider')+
+  theme(legend.position = 'none',
+          text = element_text(size = 40, face = "bold"),
+        plot.title = element_text(size = 50, face = "bold"), 
+        axis.text.x = element_text(angle = 45, hjust = 1)
+        ) + 
+  scale_x_date(
+    date_breaks = "1 week",  
+    date_labels = "%d-%b-%Y", 
+    expand = expansion(mult = c(0.01, 0.01))
+  )
+  
+
+
+Presentation <- Presentation%>% 
+  ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 3"))
+
+```
+
+## Reference information
+
+```{r echo=FALSE, eval = FALSE}
+
+layouts <- layout_summary(template_presentation)
+
+print_placeholders <- function(layout_name, master_name){
+  placeholders <- layout_properties(template_presentation, layout = layout_name, master = master_name)
+  print(paste("PLaceholders:", layout_name, master_name))
+  print(placeholders)
+}
+
+walk2(.x = layouts$layout, .y = layouts$master, ~print_placeholders(.x, .y))
+
+layout_properties(template_presentation, layout = "Two Columns Style 1", master = "Content Slide White")
+
+#ggsave('review.png', plot)
+```

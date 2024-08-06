@@ -350,7 +350,81 @@ plot <- ggplot(comparison_data, aes(x = WeekNumber)) +
 ```
 
 
+## Six+ Week Wait Matrix
 
+```{r}
+
+# Filter data
+filtered_data = filter_plot_data(data = data, speciality_group = 'all', indicator = 'diagnostic_waiting_list', report_date = params$report_date, duration = 1)
+
+# Calculate metric
+aggregated_data = filtered_data %>%
+  filter(Description == 'total' & Provider != 'InHealth' )%>%
+  group_by(Speciality, Provider) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup() 
+
+
+aggregated_data <- aggregated_data %>%
+  mutate(Activity = as.numeric(Activity))
+
+# Create pivot table
+pivot_table <- aggregated_data %>%
+  group_by(Speciality, Provider) %>%
+  summarise(Activity = sum(Activity), .groups = 'drop') %>%
+  pivot_wider(names_from = Provider, values_from = Activity, values_fill = list(Activity = 0))
+
+
+
+# Calculate row totals
+pivot_table_with_totals <- pivot_table %>%
+  rowwise() %>%
+  mutate(Total = sum(c_across(starts_with("GOSH"):starts_with("WH")), na.rm = TRUE)) %>%
+  ungroup()
+
+# Add a row with system totals
+system_total <- pivot_table_with_totals %>%
+  summarise(across(-Speciality, sum, .names = "{.col}")) %>% # Summing across all columns except Speciality
+  mutate(Speciality = "System Total") # Add System Total label
+
+# Combine the total row with the original pivot table
+final_table <- pivot_table_with_totals %>%
+  bind_rows(system_total) %>%
+  relocate(Speciality, Total) # Ensure the Total column appears after Speciality
+
+
+# Create the gt table
+gt_table <- final_table %>%
+  gt() %>%
+  # Rename the Total column to NCL
+  cols_label(Total = "NCL") %>%
+  # Format the numbers
+  fmt_number(
+    columns = c(GOSH, MEH, NMUH, RFL, RNOH, UCLH, WH, Total),
+    decimals = 0
+  ) %>%
+  # Apply red color to individual values above 90, except in NCL and System Total
+  tab_style(
+    style = cell_text(color = "red"),
+    locations = cells_body(
+      columns = c(GOSH, MEH, NMUH, RFL, RNOH, UCLH, WH),
+      rows = Speciality != "System Total" & (
+        GOSH > 90 |
+        MEH > 90 |
+        NMUH > 90 |
+        RFL > 90 |
+        RNOH > 90 |
+        UCLH > 90 |
+        WH > 90
+      )
+    )
+  )
+
+
+# Display the table
+gt_table
+
+```
 
 
 ## Endoscopy
@@ -698,7 +772,7 @@ gt_table <- data_wide %>%
     ) 
   ) %>%
   tab_options(
-    table.font.size = px(8) # Set the font size to 10px
+    table.font.size = px(8) 
   )
 
 
@@ -807,6 +881,8 @@ Presentation <- Presentation %>%
   ph_with(value = sentences_list[[1]], location = ph_location_type(type = "Text Placeholder 3"))
 
 ```
+
+
 
 
 # Creating the Presentation as Output
