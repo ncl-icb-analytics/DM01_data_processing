@@ -90,6 +90,28 @@ Presentation <- template_presentation %>%
 
 ```
 
+### Packages
+
+
+```{r}
+
+
+Presentation <- template_presentation %>%
+  add_slide(layout = "Analytics_Text_Slide_Single", master = "Content Slide White") %>%
+  ph_with(value = "Packages Used", location = ph_location_type(type = "title")) %>%
+  ph_with(value = c("Tidyverse", 
+                    "ggrepel", 
+                    "Officer",
+                    "NCLRTemplates", 
+                    "gt", 
+                    "lubridate", 
+                    "ODBC", 
+                    "DBI"), 
+                location = ph_location_type(ph_label = "Text Placeholder 3"))
+
+```
+
+
 
 ## Part 1 - Data Ingestion and Tranformation
 
@@ -133,13 +155,13 @@ Presentation <- template_presentation %>%
 ```
 
 
-Part 2 - Visualisation
+## Part 2 - Visualisation
 
 ```{r}
 
 Presentation <- template_presentation %>%
   add_slide(layout = "Analytics_Text_Slide_Single", master = "Content Slide White") %>%
-  ph_with(value = "Sandpit Upload", location = ph_location_type(type = "title")) %>%
+  ph_with(value = "Visualisation", location = ph_location_type(type = "title")) %>%
   ph_with(value = c("Processed data is pulled in from the sandpit", 
   "A template PowerPoint presentation with ICS theme is ingested", 
   "Aggregate metrics are calculated for each sub – topic", 
@@ -151,6 +173,19 @@ Presentation <- template_presentation %>%
 
 ```
 
+
+## Presentation template
+
+```{r}
+Presentation <- template_presentation %>%
+  add_slide(layout = "Analytics_Text_Slide_Single", master = "Content Slide White") %>%
+  ph_with(value = "Presentation Template", location = ph_location_type(type = "title")) %>%
+  ph_with(value = c("A template PowerPoint presentation with ICS theme is ingested", 
+  "You can create your own ppt templates and load them into the R environment", 
+  "Use Slide Master to create and edit layouts, modify or add placeholders"), 
+                location = ph_location_type(ph_label = "Text Placeholder 3"))
+
+```
 
 ## Example Slides
 
@@ -203,7 +238,7 @@ plot = ggplot(aggregated_data, aes(x=Date, y = Over_Six, label = paste0(Over_Six
   ) +
   scale_x_date(
     date_breaks = "1 week",  
-    date_labels = "%d-%b-%Y", 
+    date_labels = "%d-%b", 
     expand = expansion(mult = c(0.01, 0.01))
   )
 
@@ -232,11 +267,11 @@ plot = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagnostic 
         ) + 
   scale_x_date(
     date_breaks = "1 week",  
-    date_labels = "%d-%b-%Y", 
+    date_labels = "%d-%b", 
     expand = expansion(mult = c(0.01, 0.01))
-  )
+  ) +
+  expand_limits(x = max(aggregated_data$Date+21))
   
-
 
 Presentation <- Presentation%>% 
   ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 3"))
@@ -327,9 +362,11 @@ plot = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagnostic 
   ) +
   scale_x_date(
     date_breaks = "1 week",  
-    date_labels = "%d-%b-%Y", 
+    date_labels = "%d-%b", 
     expand = expansion(mult = c(0.01, 0.01))
-  )
+  ) +
+  expand_limits(x = max(aggregated_data$Date+21))
+
 # Embed data in slide
 Presentation <- Presentation%>% 
   ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 3"))
