@@ -347,6 +347,11 @@ plot <- ggplot(comparison_data, aes(x = WeekNumber)) +
   scale_x_discrete(limits = unique(comparison_data$WeekNumber))
 
 
+Presentation <- Presentation %>%
+  add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
+  ph_with(value = "Diagnostics - Activity", location = ph_location_type(type = "title")) %>% 
+  ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 2"))
+
 ```
 
 
@@ -376,34 +381,32 @@ pivot_table <- aggregated_data %>%
 
 
 
-# Calculate row totals
+
 pivot_table_with_totals <- pivot_table %>%
   rowwise() %>%
   mutate(Total = sum(c_across(starts_with("GOSH"):starts_with("WH")), na.rm = TRUE)) %>%
   ungroup()
 
-# Add a row with system totals
+
 system_total <- pivot_table_with_totals %>%
-  summarise(across(-Speciality, sum, .names = "{.col}")) %>% # Summing across all columns except Speciality
-  mutate(Speciality = "System Total") # Add System Total label
+  summarise(across(-Speciality, sum, .names = "{.col}")) %>%
+  mutate(Speciality = "System Total") 
 
 # Combine the total row with the original pivot table
 final_table <- pivot_table_with_totals %>%
   bind_rows(system_total) %>%
-  relocate(Speciality, Total) # Ensure the Total column appears after Speciality
+  relocate(Speciality, Total) 
 
 
-# Create the gt table
+
 gt_table <- final_table %>%
   gt() %>%
-  # Rename the Total column to NCL
   cols_label(Total = "NCL") %>%
-  # Format the numbers
   fmt_number(
     columns = c(GOSH, MEH, NMUH, RFL, RNOH, UCLH, WH, Total),
     decimals = 0
   ) %>%
-  # Apply red color to individual values above 90, except in NCL and System Total
+  # Apply red color to values above 90
   tab_style(
     style = cell_text(color = "red"),
     locations = cells_body(
@@ -418,10 +421,17 @@ gt_table <- final_table %>%
         WH > 90
       )
     )
+  ) %>% 
+  data_color(
+    final_table,
+    columns = everything(), 
+    rows = everything(), 
+    method = "auto", 
+    palette = "red",
+    
   )
 
 
-# Display the table
 gt_table
 
 ```
