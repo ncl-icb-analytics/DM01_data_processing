@@ -1,0 +1,250 @@
+---
+title: "Diagnostic Dashboard"
+format: 
+  dashboard:
+    orientation: columns
+    logo: input/NHS_logo.png
+    theme:
+    - Flatly
+    - custom.scss
+params:
+  report_date: 20240501
+  duration: 365
+---
+
+```{r setup, include=FALSE}
+
+source('src/functions.R')
+# Data ingestion
+data = read_csv('data/inter.csv')
+
+
+# Install thematic and un-comment for themed static plots (i.e., ggplot2)
+# thematic::thematic_rmd()
+```
+
+# Endoscopy
+
+## Column {width="20%"}
+
+### Row
+
+```{r}
+#| content: valuebox
+#| title: "Spam per day"
+list(
+  icon = "fa-comments",
+  color = "danger",
+  value = 20
+)
+```
+
+### Row
+
+```{r}
+#| content: valuebox
+#| title: "Spam per day"
+list(
+  icon = "trash",
+  color = "danger",
+  value = 50
+)
+```
+
+### Row
+```{r}
+#| title: "Warning"
+
+rate <-50
+gauge(rate, min = 0, max = 100, symbol = '%', gaugeSectors(
+  success = c(80, 100), warning = c(40, 79), danger = c(0, 39)
+))
+```
+
+## Column {width="40%"}
+
+
+### Row
+```{r}
+#| title: Total
+
+# Filter data
+filtered_data = filter_plot_data(data = data, speciality_group = 'Endoscopy', report_date = params$report_date, duration = params$duration)
+
+# Calculate metric
+aggregated_data = filtered_data %>%
+  filter(Indicator %in% c('diagnostic_waiting_list', 'wait_list'), 
+         !str_detect(Description, 'tci')) %>%
+  mutate(
+    Length = case_when(
+      Description == 'total' ~ 'Over_Six',
+      str_detect(Description, 'weeks') ~ 'Under_Six'
+    )
+  ) %>%
+  group_by(Date, Length) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = Date, names_from = Length, values_from = Activity) %>%
+  mutate(Total = Over_Six + Under_Six,
+         Prop_over_six = round(Over_Six/Total*100,0)) 
+
+
+plot = ggplot(aggregated_data, aes(x=Date, y = Over_Six, label = paste0(Over_Six, '\n(', Prop_over_six, '%)'))) +
+  geom_bar( stat="identity", fill =  "#1B9B9D") + 
+  geom_text(position = position_stack(vjust=0.5), colour = 'white')+
+  theme_nclicb()+
+  ggtitle('Whatever this is supposed to show...')+
+  theme(legend.position = 'none',
+         )+
+  scale_x_date(date_breaks = "1 week", date_labels = "%d-%b") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(x="Week commencing",
+       y ="Over 6 weeks (people)",
+       title="Endoscopy waiting list",
+       subtitle="6+ weeks")
+
+ggplotly(plot)
+```
+
+### Row
+```{r}
+#| title: Total
+# Filter data
+filtered_data = filter_plot_data(data = data, speciality_group = 'Endoscopy', indicator = 'activity', report_date = params$report_date, duration = params$duration)
+
+# Calculate metric
+aggregated_data = filtered_data %>%
+  group_by(Date,Description) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup() 
+
+
+plot = ggplot(aggregated_data, aes(x=Date, y = Activity, group = Description, color = Description, label = paste0(Description, ': ', Activity)))+
+  geom_line() + 
+  theme_nclicb()+
+  theme(legend.position = 'none',
+         )+
+  scale_x_date(date_breaks = "1 week", date_labels = "%d-%b") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(x="Week commencing",
+       y ="Activity (procedures)",
+       title="Endoscopy Activity",
+       subtitle="Total")
+
+ggplotly(plot)
+```
+
+
+## Column {width="40%"}
+
+### Row {.tabset}
+
+```{r}
+#| title: By provider
+# Filter data
+filtered_data = filter_plot_data(data = data, speciality_group = 'Endoscopy', indicator = 'diagnostic_waiting_list', report_date = params$report_date, duration = params$duration)
+
+# Calculate metric
+aggregated_data = filtered_data %>%
+  filter(Description == 'total')%>%
+  group_by(Date, Provider) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup() 
+
+# Plot data
+plot = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagnostic 6+ Week waits per provider') +
+  scale_x_date(date_breaks = "1 week", date_labels = "%d-%b") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(x="Week commencing",
+       y ="Over 6 weeks (people)",
+       title="Endoscopy waiting list",
+       subtitle="6+ weeks")
+
+ggplotly(plot)
+```
+
+```{r}
+#| title: Individual provider
+# Filter data
+filtered_data = filter_plot_data(data = data, speciality_group = 'Endoscopy', indicator = 'diagnostic_waiting_list', report_date = params$report_date, duration = params$duration)
+
+# Calculate metric
+aggregated_data = filtered_data %>%
+  filter(Description == 'total')%>%
+  group_by(Date, Provider) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup()  %>%
+  filter(Activity>0)
+
+# Plot data
+plot = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagnostic 6+ Week waits per provider') + 
+  facet_wrap(~Provider, scales = 'free_y')+
+  theme(panel.spacing = unit(0.5, "lines"))+
+  scale_x_date(date_breaks = "1 week", date_labels = "%d-%b") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(x="Week commencing",
+       y ="Over 6 weeks (people)",
+       title="Endoscopy waiting list",
+       subtitle="6+ weeks")
+
+ggplotly(plot)
+```
+
+### Row {.tabset}
+```{r}
+#| title: By Provider
+
+# Filter data
+filtered_data = filter_plot_data(data = data, speciality_group = 'Endoscopy', indicator = 'activity', report_date = params$report_date, duration = params$duration)
+
+# Calculate metric
+aggregated_data = filtered_data %>%
+  filter(Description != 'total')%>%
+  group_by(Date, Provider) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup() 
+
+# Plot data
+plot = line_plot_time(aggregated_data, Provider, 'Number of procedures', 'Weekly endoscopy activity') +
+  scale_x_date(date_breaks = "1 week", date_labels = "%d-%b") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(x="Week commencing",
+       y ="Activity (procedures)",
+       title="Endoscopy Activity",
+       subtitle="Total provider")
+
+ggplotly(plot)
+```
+
+```{r}
+#| title: Individual provider
+# Filter data
+filtered_data = filter_plot_data(data = data, speciality_group = 'Endoscopy', indicator = 'activity', report_date = params$report_date, duration = params$duration)
+
+# Calculate metric
+aggregated_data = filtered_data %>%
+  filter(Description != 'total')%>%
+  group_by(Date,Provider, Description) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup() %>%
+  filter(Activity >0)
+
+
+# Plot data
+plot = ggplot(aggregated_data, aes(fill=Description, y=Activity, x=Date)) + 
+    geom_bar(position="fill", stat="identity")+
+  theme_nclicb()+
+  scale_x_date(date_breaks = "1 week", date_labels = "%d-%b") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(x="Week commencing",
+       y ="Activity (procedures)",
+       title="Endoscopy Activity",
+       subtitle="Total provider")+
+  facet_wrap(~Provider)
+
+ggplotly(plot)
+```
+
+# Diagnostic
+
+# QA
