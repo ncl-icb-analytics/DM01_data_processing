@@ -215,6 +215,50 @@ create_wide_table <- function(data, title) {
   return(gt_table)
 }
 
+# Text modification ----
+
+# Function to generate lookup table
+generate_lookup_table <- function(data) {
+  
+  summary_data <- data %>%
+    filter(between(Date, ymd(params$report_date) - days(366) , ymd(params$report_date)))%>%
+    arrange(Date) %>%
+    mutate(Current_Activity = Activity,
+           delta_1 = Current_Activity - lag(Current_Activity,1),
+           perc_1 = delta_1 / lag(Current_Activity,1) *100,
+           delta_6 = Current_Activity - lag(Current_Activity,6),
+           perc_6 = delta_6 / lag(Current_Activity,6) *100,
+           delta_52 = Current_Activity - lag(Current_Activity,52),
+           perc_52 = delta_52 / lag(Current_Activity,52) *100) %>%
+    pivot_longer(starts_with('delta')|starts_with('perc'), names_to = 'gap', values_to = 'delta') %>%
+    separate_wider_delim(gap, delim = '_', names = c('type', 'Gap'))  %>%
+    mutate(
+        Level = case_when(
+          delta >0 ~ 'increased',
+          delta == 0 ~ 'did not change',
+          delta < 0 ~ 'decreased',
+          TRUE ~ as.character(NA)
+        )
+      ) %>%
+    filter(Date == max(Date)) %>%
+    pivot_wider(names_from = type, values_from = delta)
+
+  return(summary_data)
+}
+
+generate_sentences <- function(lookup_table, metric) {
+  
+  sentences_list <- lookup_table %>%
+    rowwise() %>%
+    mutate(
+      Sentence = str_glue(
+        "For the week ending {format(Date, '%d/%m/%Y')}, the {metric} { Level} by {format(abs(delta), big.mark = ',')} ({sprintf('%.2f', abs(perc))}%) to {format(abs(Current_Activity), big.mark = ',')} over the last {Gap} week(s)."
+      )
+    ) %>%
+    pull(Sentence)
+  
+  return(sentences_list)
+}
 
 # testing area ----  
 #test = filter_plot_data(data = data, indicator = 'patient_cancelled', specialty = 'Magnetic Resonance Imaging', report_date = 20240201, duration = 30)
