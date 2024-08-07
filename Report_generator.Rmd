@@ -121,7 +121,7 @@ Presentation <- template_presentation %>%
 ```{r}
 
 # Filter data
-filtered_data = filter_plot_data(data = data, speciality_group = 'all', report_date = params$report_date, duration = params$duration)
+filtered_data = filter_plot_data(data = data, speciality_group = 'all', report_date = params$report_date, duration = 120)
 
 
 aggregated_data <- filtered_data %>%
@@ -167,7 +167,7 @@ plot = ggplot(aggregated_data, aes(x=Date, y = Over_Six, label = paste0(Over_Six
   ) +
   scale_x_date(
     date_breaks = "1 week",  
-    date_labels = "%d-%b-%Y", 
+    date_labels = "%d-%b-%y", 
     expand = expansion(mult = c(0.01, 0.01))
   )
 
@@ -201,9 +201,10 @@ plot = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagnostic 
         ) + 
   scale_x_date(
     date_breaks = "1 week",  
-    date_labels = "%d-%b-%Y", 
+    date_labels = "%d-%b-%y", 
     expand = expansion(mult = c(0.01, 0.01))
-  )
+  )+
+  expand_limits(x = max(aggregated_data$Date+28))
   
 
 
@@ -223,7 +224,7 @@ Presentation <- Presentation%>%
 
 ```{r}
 # Filter data
-filtered_data = filter_plot_data(data = data, speciality_group = 'all', indicator = 'activity', report_date = params$report_date, duration = params$duration)
+filtered_data = filter_plot_data(data = data, speciality_group = 'all', indicator = 'activity', report_date = params$report_date, duration = 90)
 
 filtered_data <- filtered_data %>%
   filter(Description != 'total')
@@ -235,7 +236,7 @@ aggregated_data = filtered_data %>%
 
 # Plot data
 plot = line_plot_time(aggregated_data, Description, 'Activity', 'Weekly Diagnostic Scans by Source')+
-  theme(legend.position = 'bottom',
+  theme(legend.position = 'none',
         legend.text = element_text(size = 20),
         legend.title = element_blank(),
         text = element_text(size = 40, face = "bold"),
@@ -244,12 +245,13 @@ plot = line_plot_time(aggregated_data, Description, 'Activity', 'Weekly Diagnost
         ) +  
   scale_x_date(
     date_breaks = "1 week",  
-    date_labels = "%d-%b-%Y"
+    date_labels = "%d-%b-%y"
   ) +
   scale_y_continuous(
     labels = scales::comma,      
     breaks = seq(0, 15000, by = 5000)
-  )
+  )  +
+  expand_limits(x = max(aggregated_data$Date+21))
   
 
 Presentation <- Presentation %>%
@@ -290,9 +292,11 @@ plot = ggplot(aggregated_data, aes(x=Date, y = Activity, fill = Provider)) +
   ) +
   scale_x_date(
     date_breaks = "1 week",  
-    date_labels = "%d-%b-%Y", 
+    date_labels = "%d-%b-%y", 
     expand = expansion(mult = c(0.01, 0.01))
-  )
+  ) +
+  expand_limits(x = max(aggregated_data$Date+21)) +
+  scale_colour_ncl()
 
 Presentation <- Presentation%>% 
   ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 3"))
@@ -302,15 +306,15 @@ Presentation <- Presentation%>%
 
 
 ```{r}
-filtered_data = filter_plot_data(data = data, speciality_group = 'all', indicator = 'activity', report_date = params$report_date, duration = params$duration)
+filtered_data = filter_plot_data(data = data, speciality_group = 'all', indicator = 'activity', report_date = params$report_date, duration = 90)
 
 
 # Calculate metric
-aggregated_data = filtered_data %>%
-  filter(Description == 'total')%>%
+aggregated_data <- filtered_data %>%
+  filter(Description == 'total') %>%
   group_by(Date, WeekNumber) %>%
   summarise(Activity = sum(Activity)) %>%
-  ungroup() 
+  ungroup()
 
 # Extract year for comparison
 aggregated_data <- aggregated_data %>%
@@ -319,38 +323,47 @@ aggregated_data <- aggregated_data %>%
   )
 
 # Separate the data into current and previous years
-current_year <- aggregated_data %>% filter(Year == 2024) %>% select(WeekNumber, Activity) %>% rename(CurrentActivity = Activity)
-previous_year <- aggregated_data %>% filter(Year == 2023) %>% select(WeekNumber, Activity) %>% rename(PreviousActivity = Activity)
+current_year <- aggregated_data %>%
+  filter(Year == 2024) %>%
+  select(Date, WeekNumber, Activity) %>%
+  rename(CurrentActivity = Activity)
 
-# Merge datasets
+previous_year <- aggregated_data %>%
+  filter(Year == 2023) %>%
+  select(WeekNumber, Activity) %>%
+  rename(PreviousActivity = Activity)
+
+# Merge datasets on WeekNumber
 comparison_data <- current_year %>%
   left_join(previous_year, by = "WeekNumber")
 
 # Plot the comparison
-plot <- ggplot(comparison_data, aes(x = WeekNumber)) +
+plot <- ggplot(comparison_data, aes(x = Date)) +
   geom_line(aes(y = CurrentActivity, color = "Current Year"), size = 1) +
   geom_line(aes(y = PreviousActivity, color = "Previous Year"), size = 1, linetype = "dashed") +
   geom_point(aes(y = CurrentActivity, color = "Current Year"), size = 3) +
   geom_point(aes(y = PreviousActivity, color = "Previous Year"), size = 3) +
   labs(
-    title = "Weekly Diagnostic activity vs previous year",
+    title = "Weekly Diagnostic Activity vs Previous Year",
     x = "Date",
     y = "Activity",
     color = "Legend"
   ) +
   theme_nclicb() +
   theme(
-    text = element_text(size = 14, face = "bold"),
+    text = element_text(size = 40, face = "bold"),
     axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "bottom"
+    legend.position = "bottom", 
+    plot.title = element_text(size = 80, face = "bold")
   ) +
-  scale_x_discrete(limits = unique(comparison_data$WeekNumber))
+  scale_x_date(date_labels = "%d-%b", date_breaks = "1 week")
 
-
+# Embed data in the slide
 Presentation <- Presentation %>%
-  add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
-  ph_with(value = "Diagnostics - Activity", location = ph_location_type(type = "title")) %>% 
+  add_slide(layout = "Two Columns Style 1", master = "Content Slide White") %>%
+  ph_with(value = "Diagnostics - Activity", location = ph_location_type(type = "title")) %>%
   ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 2"))
+
 
 ```
 

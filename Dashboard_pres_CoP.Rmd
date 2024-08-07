@@ -192,7 +192,7 @@ Presentation <- template_presentation %>%
 ```{r}
 
 # Filter data
-filtered_data = filter_plot_data(data = data, speciality_group = 'all', report_date = params$report_date, duration = params$duration)
+filtered_data = filter_plot_data(data = data, speciality_group = 'all', report_date = params$report_date, duration = 90)
 
 
 aggregated_data <- filtered_data %>%
@@ -217,7 +217,7 @@ coeff <- 500
 
 plot = ggplot(aggregated_data, aes(x=Date, y = Over_Six, label = paste0(Over_Six, '\n(', Prop_over_six, '%)'))) +
   geom_bar( stat="identity", fill =  "#1B9B9D") + 
-  geom_text(size = 8, position = position_stack(vjust=0.5), colour = 'black')+
+  geom_text(size = 8, position = position_stack(vjust=0.5), colour = 'white')+
   geom_line( aes(y=Prop_over_six*coeff), color = "#005EB8", size = 2) +
    scale_y_continuous(
     
