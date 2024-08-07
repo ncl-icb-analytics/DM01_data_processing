@@ -150,6 +150,7 @@ six_week_sentance <- data %>%
 
 Presentation <- Presentation %>%
   add_slide(layout  = "Analytics_two_content_upper_text", master = "Content Slide White")  %>%
+  ph_with(value = "NCL Diagnostics - All Tests", location = ph_location_type(type = "title"))%>%
   ph_with(value = paste0(sentences_list[[1]],'\n', six_week_sentance[[1]]), location = ph_location_label(ph_label = "Text Placeholder 6"))
 
 ```
@@ -261,6 +262,106 @@ Presentation <- Presentation%>%
 
 ## SLIDE 2B: Diagnostics - Activity (plots)
 
+### Table
+
+```{r}
+filtered_data = filter_plot_data(data = data, speciality_group = 'all', indicator = 'activity', report_date = params$report_date, duration = 21)
+
+
+# Calculate metric
+aggregated_data <- filtered_data %>%
+  filter(Description == 'total'& Provider != "Inhealth") %>%
+  group_by(Provider, Date, WeekNumber) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup()
+
+
+
+latest_date <- max(aggregated_data$Date)
+previous_date <- latest_date - weeks(1)
+
+# Get corresponding WeekNumber for latest and previous weeks
+latest_week_number <- aggregated_data %>% filter(Date == latest_date) %>% pull(WeekNumber) %>% unique()
+previous_week_number <- aggregated_data %>% filter(Date == previous_date) %>% pull(WeekNumber) %>% unique()
+
+# Reshape data to wide format
+wide_data <- aggregated_data %>%
+  pivot_wider(names_from = Provider, values_from = Activity, values_fill = 0)
+
+# Grand Total for each week
+wide_data <- wide_data %>%
+  mutate(GrandTotal = rowSums(select(., -c(WeekNumber, Date))))
+
+# Latest Week Change and Percent Change
+latest_week <- wide_data %>%
+  filter(WeekNumber == latest_week_number) %>%
+  select(-c(WeekNumber, Date))
+
+previous_week <- wide_data %>%
+  filter(WeekNumber == previous_week_number) %>%
+  select(-c(WeekNumber, Date))
+
+# Calculate changes
+latest_week_change <- latest_week - previous_week
+
+Percent_change <- (latest_week_change/previous_week)
+
+final_data <- wide_data %>%
+  add_row(WeekNumber = "Latest week change", Date = NA, !!!latest_week_change) %>%
+  add_row(WeekNumber = "% Change", Date = NA, !!!Percent_change)
+
+gt_table <- final_data %>%
+  gt() %>%
+  sub_missing(missing_text = " ")%>%
+  tab_header(
+    title = "Weekly Diagnostic Activity by Provider"
+  ) %>%
+  fmt_date(
+    columns = c(Date),
+    date_style = 7 
+  ) %>%
+  fmt_number(
+    columns = c(-WeekNumber, -Date),
+    decimals = 0
+  ) %>%
+  fmt_percent(
+    columns = c(-WeekNumber, -Date),
+    rows = WeekNumber == "% Change",
+    decimals = 2
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_body(
+      columns = c(WeekNumber),
+      rows = c(nrow(final_data)-1, nrow(final_data))
+    )
+  ) %>%
+  tab_style(
+    style = cell_fill(color = "#005EB8"),
+    locations = cells_column_labels(everything())) %>%  
+  cols_label(
+    WeekNumber = "Week Number",
+    Date = "W/E"
+  ) %>%
+  tab_options(
+    table.font.size = "small"
+  )%>%
+  tab_style(
+    style = cell_text(color = "white", weight = "bold"),
+    locations = cells_column_labels(everything()))
+
+
+gt_table |> gtsave("gt_table.png")
+
+
+
+
+Presentation <- Presentation %>%
+  add_slide(layout = "Analytics_3Chart_Table", master = "Content Slide White")  %>%
+  ph_with(external_img("gt_table.png"), location = ph_location_label(ph_label = "Picture Placeholder 5"))
+
+```
+
 ### Image (left): Weekly Scans by Source
 
 ```{r}
@@ -296,7 +397,6 @@ plot = line_plot_time(aggregated_data, Description, 'Activity', 'Weekly Diagnost
   
 
 Presentation <- Presentation %>%
-  add_slide(layout = "Analytics_3Chart_Table", master = "Content Slide White")  %>%
   ph_with(value = "Diagnostics - Activity", location = ph_location_type(type = "title")) %>% 
   ph_with(value = plot, location = ph_location_label(ph_label = "Picture Placeholder 11"))
 
@@ -406,103 +506,6 @@ Presentation <- Presentation %>%
 
 
 ```
-### Weekly change table
-
-
-```{r}
-filtered_data = filter_plot_data(data = data, speciality_group = 'all', indicator = 'activity', report_date = params$report_date, duration = 21)
-
-
-# Calculate metric
-aggregated_data <- filtered_data %>%
-  filter(Description == 'total'& Provider != "Inhealth") %>%
-  group_by(Provider, Date, WeekNumber) %>%
-  summarise(Activity = sum(Activity)) %>%
-  ungroup()
-
-
-
-latest_date <- max(aggregated_data$Date)
-previous_date <- latest_date - weeks(1)
-
-# Get corresponding WeekNumber for latest and previous weeks
-latest_week_number <- aggregated_data %>% filter(Date == latest_date) %>% pull(WeekNumber) %>% unique()
-previous_week_number <- aggregated_data %>% filter(Date == previous_date) %>% pull(WeekNumber) %>% unique()
-
-# Reshape data to wide format
-wide_data <- aggregated_data %>%
-  pivot_wider(names_from = Provider, values_from = Activity, values_fill = 0)
-
-# Grand Total for each week
-wide_data <- wide_data %>%
-  mutate(GrandTotal = rowSums(select(., -c(WeekNumber, Date))))
-
-# Latest Week Change and Percent Change
-latest_week <- wide_data %>%
-  filter(WeekNumber == latest_week_number) %>%
-  select(-c(WeekNumber, Date))
-
-previous_week <- wide_data %>%
-  filter(WeekNumber == previous_week_number) %>%
-  select(-c(WeekNumber, Date))
-
-# Calculate changes
-latest_week_change <- latest_week - previous_week
-
-Percent_change <- (latest_week_change/previous_week)
-
-final_data <- wide_data %>%
-  add_row(WeekNumber = "Latest week change", Date = NA, !!!latest_week_change) %>%
-  add_row(WeekNumber = "% Change", Date = NA, !!!Percent_change)
-
-gt_table <- final_data %>%
-  gt() %>%
-  tab_header(
-    title = "Weekly Diagnostic Activity by Provider"
-  ) %>%
-  fmt_date(
-    columns = vars(Date),
-    date_style = 7 
-  ) %>%
-  fmt_number(
-    columns = vars(-WeekNumber, -Date),
-    decimals = 0
-  ) %>%
-  fmt_percent(
-    columns = vars(-WeekNumber, -Date),
-    rows = WeekNumber == "% Change",
-    decimals = 2
-  ) %>%
-  tab_style(
-    style = cell_text(weight = "bold"),
-    locations = cells_body(
-      columns = vars(WeekNumber),
-      rows = c(nrow(final_data)-1, nrow(final_data))
-    )
-  ) %>%
-  tab_style(
-    style = cell_fill(color = "#005EB8"),
-    locations = cells_column_labels(everything())) %>%  
-  cols_label(
-    WeekNumber = "Week Number",
-    Date = "W/E"
-  ) %>%
-  tab_options(
-    table.font.size = "small"
-  )%>%
-  tab_style(
-    style = cell_text(color = "white", weight = "bold"),
-    locations = cells_column_labels(everything()))
-
-gt_table |> gtsave("gt_table.png")
-
-
-
-
-Presentation <- Presentation %>%
-  ph_with(external_img("gt_table.png"), location = ph_location_label(ph_label = "Picture Placeholder 5"))
-
-```
 
 
 ## SLIDE 3: Six+ Week Wait Matrix
@@ -559,18 +562,29 @@ gt_table <- final_table %>%
   tab_spanner(label = "Samples", columns = c(Total,GOSH,MEH,NMUH, RFL,RNOH,UCLH,WH))
   
 
-
+gt_table |> gtsave("gt_table.png", expand = 10)
 
 Presentation <- Presentation %>%
-  add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
+  add_slide(layout = "One Column", master = "Content Slide White")  %>%
   ph_with(value = "6+ Week Matrix", location = ph_location_type(type = "title")) %>% 
-  ph_with(external_img("gt_table.png", width = 10, height = 3), location = ph_location_label(ph_label = "Content Placeholder 3"))
+  ph_with(external_img("gt_table.png"), location = ph_location_label(ph_label = "Content Placeholder 2"))
 
 ```
 
 ## SLIDE 4: Other modalities overview
 
+
 # END OF MVP (NEXT SECTION IS IN REPEARS)
+
+
+# Creating the Presentation as Output
+```{r}
+Presentation %>%
+  print(target = paste0('output/diagnostic_report_data_', params$report_date, '.pptx'))
+
+```
+
+
 
 ## Endoscopy
 
@@ -944,13 +958,6 @@ Presentation <- Presentation %>%
 ```
 
 
-# Creating the Presentation as Output
-```{r}
-Presentation %>%
-  print(target = paste0('output/diagnostic_report_data_', params$report_date, '.pptx'))
-
-```
-
 
 
 # Closing the Sandpit connection
@@ -976,7 +983,7 @@ print_placeholders <- function(layout_name, master_name){
 
 walk2(.x = layouts$layout, .y = layouts$master, ~print_placeholders(.x, .y))
 
-layout_properties(template_presentation, layout = "Analytics_two_content_upper_text", master = "Content Slide White")
+layout_properties(template_presentation, layout = "One Column", master = "Content Slide White")
 
 #ggsave('review.png', plot)
 ```
