@@ -7,6 +7,8 @@ library(NCLRtemplates)
 library(officer)
 library(xtable)
 library(gt)
+library(odbc)
+library(DBI)
 
 # Themes??? ----
 # using NCL for now - but should label providers with specific colours for consistency
@@ -176,7 +178,7 @@ create_gt_table <- function(data, title) {
       decimals = 0
     ) %>%
     tab_style(
-      style = cell_fill(color = "lightgray"),
+      style = cell_fill(color = "blue"),
       locations = cells_body(
         columns = vars(Activity)
       )
