@@ -161,7 +161,7 @@ Presentation <- Presentation %>%
 ```{r}
 
 # Filter data
-filtered_data = filter_plot_data(data = data, speciality_group = 'all', report_date = params$report_date, duration = params$duration)
+filtered_data = filter_plot_data(data = data, speciality_group = 'all', report_date = params$report_date, duration = 120)
 
 
 aggregated_data <- filtered_data %>%
@@ -207,7 +207,7 @@ plot = ggplot(aggregated_data, aes(x=Date, y = Over_Six, label = paste0(Over_Six
   ) +
   scale_x_date(
     date_breaks = "1 week",  
-    date_labels = "%d-%b-%Y", 
+    date_labels = "%d-%b-%y", 
     expand = expansion(mult = c(0.01, 0.01))
   )
 
@@ -241,9 +241,10 @@ plot = line_plot_time(aggregated_data, Provider, 'Number of cases', 'Diagnostic 
         ) + 
   scale_x_date(
     date_breaks = "1 week",  
-    date_labels = "%d-%b-%Y", 
+    date_labels = "%d-%b-%y", 
     expand = expansion(mult = c(0.01, 0.01))
-  )
+  )+
+  expand_limits(x = max(aggregated_data$Date+28))
   
 
 
@@ -264,7 +265,7 @@ Presentation <- Presentation%>%
 
 ```{r}
 # Filter data
-filtered_data = filter_plot_data(data = data, speciality_group = 'all', indicator = 'activity', report_date = params$report_date, duration = params$duration)
+filtered_data = filter_plot_data(data = data, speciality_group = 'all', indicator = 'activity', report_date = params$report_date, duration = 90)
 
 filtered_data <- filtered_data %>%
   filter(Description != 'total')
@@ -276,27 +277,28 @@ aggregated_data = filtered_data %>%
 
 # Plot data
 plot = line_plot_time(aggregated_data, Description, 'Activity', 'Weekly Diagnostic Scans by Source')+
-  theme(legend.position = 'bottom',
-        legend.text = element_text(size = 20),
+  theme(legend.position = 'none',
+        legend.text = element_text(size = 10),
         legend.title = element_blank(),
-        text = element_text(size = 40, face = "bold"),
-        plot.title = element_text(size = 50, face = "bold"), 
+        text = element_text(size = 20, face = "bold"),
+        plot.title = element_text(size = 30, face = "bold"), 
         axis.text.x = element_text(angle = 45, hjust = 1)
         ) +  
   scale_x_date(
     date_breaks = "1 week",  
-    date_labels = "%d-%b-%Y"
+    date_labels = "%d-%b-%y"
   ) +
   scale_y_continuous(
     labels = scales::comma,      
     breaks = seq(0, 15000, by = 5000)
-  )
+  )  +
+  expand_limits(x = max(aggregated_data$Date+21))
   
 
 Presentation <- Presentation %>%
-  add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
+  add_slide(layout = "Analytics_3Chart_Table", master = "Content Slide White")  %>%
   ph_with(value = "Diagnostics - Activity", location = ph_location_type(type = "title")) %>% 
-  ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 2"))
+  ph_with(value = plot, location = ph_location_label(ph_label = "Picture Placeholder 11"))
 
 ```
 
@@ -318,9 +320,9 @@ aggregated_data = filtered_data %>%
 
 plot = ggplot(aggregated_data, aes(x=Date, y = Activity, fill = Provider)) +
   geom_bar( stat="identity") + 
-  theme_nclicb()+
+  theme_minimal()+
   ggtitle('Weekly Diagnostic Scans by Provider')+
-  theme(legend.position = 'bottom',
+  theme(legend.position = 'right',
         legend.text = element_text(size = 20),
         legend.title = element_blank(),
           text = element_text(size = 40, face = "bold"),
@@ -331,27 +333,28 @@ plot = ggplot(aggregated_data, aes(x=Date, y = Activity, fill = Provider)) +
   ) +
   scale_x_date(
     date_breaks = "1 week",  
-    date_labels = "%d-%b-%Y", 
-    expand = expansion(mult = c(0.01, 0.01))
-  )
+    date_labels = "%d-%b-%y"
+  ) +
+  theme_nclicb() +
+  scale_fill_ncl()
 
 Presentation <- Presentation%>% 
-  ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 3"))
+  ph_with(value = plot, location = ph_location_label(ph_label = "Picture Placeholder 7"))
 ```
 
 ### Image (right): Weekly Diagnostic activity vs previous year
 
 
 ```{r}
-filtered_data = filter_plot_data(data = data, speciality_group = 'all', indicator = 'activity', report_date = params$report_date, duration = params$duration)
+filtered_data = filter_plot_data(data = data, speciality_group = 'all', indicator = 'activity', report_date = params$report_date, duration = 90)
 
 
 # Calculate metric
-aggregated_data = filtered_data %>%
-  filter(Description == 'total')%>%
+aggregated_data <- filtered_data %>%
+  filter(Description == 'total') %>%
   group_by(Date, WeekNumber) %>%
   summarise(Activity = sum(Activity)) %>%
-  ungroup() 
+  ungroup()
 
 # Extract year for comparison
 aggregated_data <- aggregated_data %>%
@@ -360,38 +363,144 @@ aggregated_data <- aggregated_data %>%
   )
 
 # Separate the data into current and previous years
-current_year <- aggregated_data %>% filter(Year == 2024) %>% select(WeekNumber, Activity) %>% rename(CurrentActivity = Activity)
-previous_year <- aggregated_data %>% filter(Year == 2023) %>% select(WeekNumber, Activity) %>% rename(PreviousActivity = Activity)
+current_year <- aggregated_data %>%
+  filter(Year == 2024) %>%
+  select(Date, WeekNumber, Activity) %>%
+  rename(CurrentActivity = Activity)
 
-# Merge datasets
+previous_year <- aggregated_data %>%
+  filter(Year == 2023) %>%
+  select(WeekNumber, Activity) %>%
+  rename(PreviousActivity = Activity)
+
+# Merge datasets on WeekNumber
 comparison_data <- current_year %>%
   left_join(previous_year, by = "WeekNumber")
 
 # Plot the comparison
-plot <- ggplot(comparison_data, aes(x = WeekNumber)) +
+plot <- ggplot(comparison_data, aes(x = Date)) +
   geom_line(aes(y = CurrentActivity, color = "Current Year"), size = 1) +
   geom_line(aes(y = PreviousActivity, color = "Previous Year"), size = 1, linetype = "dashed") +
   geom_point(aes(y = CurrentActivity, color = "Current Year"), size = 3) +
   geom_point(aes(y = PreviousActivity, color = "Previous Year"), size = 3) +
   labs(
-    title = "Weekly Diagnostic activity vs previous year",
+    title = "Weekly Diagnostic Activity vs Previous Year",
     x = "Date",
     y = "Activity",
     color = "Legend"
   ) +
   theme_nclicb() +
   theme(
-    text = element_text(size = 14, face = "bold"),
+    text = element_text(size = 20, face = "bold"),
     axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "bottom"
+    legend.position = "right", 
+    legend.text = element_text(size = 10),
+    legend.title = element_blank(),
+    plot.title = element_text(size = 30, face = "bold")
   ) +
-  scale_x_discrete(limits = unique(comparison_data$WeekNumber))
+  scale_x_date(date_labels = "%d-%b", date_breaks = "1 week")
+
+# Embed data in the slide
+Presentation <- Presentation %>%
+  ph_with(value = plot, location = ph_location_label(ph_label = "Picture Placeholder 9"))
+
+
+```
+### Weekly change table
+
+
+```{r}
+filtered_data = filter_plot_data(data = data, speciality_group = 'all', indicator = 'activity', report_date = params$report_date, duration = 21)
+
+
+# Calculate metric
+aggregated_data <- filtered_data %>%
+  filter(Description == 'total'& Provider != "Inhealth") %>%
+  group_by(Provider, Date, WeekNumber) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup()
+
+
+
+latest_date <- max(aggregated_data$Date)
+previous_date <- latest_date - weeks(1)
+
+# Get corresponding WeekNumber for latest and previous weeks
+latest_week_number <- aggregated_data %>% filter(Date == latest_date) %>% pull(WeekNumber) %>% unique()
+previous_week_number <- aggregated_data %>% filter(Date == previous_date) %>% pull(WeekNumber) %>% unique()
+
+# Reshape data to wide format
+wide_data <- aggregated_data %>%
+  pivot_wider(names_from = Provider, values_from = Activity, values_fill = 0)
+
+# Grand Total for each week
+wide_data <- wide_data %>%
+  mutate(GrandTotal = rowSums(select(., -c(WeekNumber, Date))))
+
+# Latest Week Change and Percent Change
+latest_week <- wide_data %>%
+  filter(WeekNumber == latest_week_number) %>%
+  select(-c(WeekNumber, Date))
+
+previous_week <- wide_data %>%
+  filter(WeekNumber == previous_week_number) %>%
+  select(-c(WeekNumber, Date))
+
+# Calculate changes
+latest_week_change <- latest_week - previous_week
+
+Percent_change <- (latest_week_change/previous_week)
+
+final_data <- wide_data %>%
+  add_row(WeekNumber = "Latest week change", Date = NA, !!!latest_week_change) %>%
+  add_row(WeekNumber = "% Change", Date = NA, !!!Percent_change)
+
+gt_table <- final_data %>%
+  gt() %>%
+  tab_header(
+    title = "Weekly Diagnostic Activity by Provider"
+  ) %>%
+  fmt_date(
+    columns = vars(Date),
+    date_style = 7 
+  ) %>%
+  fmt_number(
+    columns = vars(-WeekNumber, -Date),
+    decimals = 0
+  ) %>%
+  fmt_percent(
+    columns = vars(-WeekNumber, -Date),
+    rows = WeekNumber == "% Change",
+    decimals = 2
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_body(
+      columns = vars(WeekNumber),
+      rows = c(nrow(final_data)-1, nrow(final_data))
+    )
+  ) %>%
+  tab_style(
+    style = cell_fill(color = "#005EB8"),
+    locations = cells_column_labels(everything())) %>%  
+  cols_label(
+    WeekNumber = "Week Number",
+    Date = "W/E"
+  ) %>%
+  tab_options(
+    table.font.size = "small"
+  )%>%
+  tab_style(
+    style = cell_text(color = "white", weight = "bold"),
+    locations = cells_column_labels(everything()))
+
+gt_table |> gtsave("gt_table.png")
+
+
 
 
 Presentation <- Presentation %>%
-  add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
-  ph_with(value = "Diagnostics - Activity", location = ph_location_type(type = "title")) %>% 
-  ph_with(value = plot, location = ph_location_label(ph_label = "Content Placeholder 2"))
+  ph_with(external_img("gt_table.png"), location = ph_location_label(ph_label = "Picture Placeholder 5"))
 
 ```
 
@@ -451,7 +560,11 @@ gt_table <- final_table %>%
   
 
 
-gt_table
+
+Presentation <- Presentation %>%
+  add_slide(layout = "Two Columns Style 1", master = "Content Slide White")  %>%
+  ph_with(value = "6+ Week Matrix", location = ph_location_type(type = "title")) %>% 
+  ph_with(external_img("gt_table.png", width = 10, height = 3), location = ph_location_label(ph_label = "Content Placeholder 3"))
 
 ```
 

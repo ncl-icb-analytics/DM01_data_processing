@@ -133,7 +133,7 @@ ggplot(data, aes(x = Date, y = Activity, group = {{plot_var}}, colour = {{plot_v
                   aes(color = {{plot_var}}, label = str_wrap({{plot_var}}, 8)),
                   family = "Lato",
                   fontface = "bold",
-                  size = 15,
+                  size = 10,
                   direction = "y",
                   nudge_x = 3,
                   nudge_y = 0.1,
