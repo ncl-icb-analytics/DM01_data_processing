@@ -474,6 +474,10 @@ generate_sentences <- function(data) {
 sentences_list <- generate_sentences(aggregated_data)
 print(sentences_list)
 
+Presentation <- Presentation %>%
+  add_slide(layout  = "Analytics_two_content_upper_text", master = "Content Slide White")  %>%
+  ph_with(value = sentences_list[[1]], location = ph_location_label(ph_label = "Text Placeholder 6"))
+
 ```
 
 
@@ -512,7 +516,7 @@ print_placeholders <- function(layout_name, master_name){
 
 walk2(.x = layouts$layout, .y = layouts$master, ~print_placeholders(.x, .y))
 
-layout_properties(template_presentation, layout = "Two Columns Style 1", master = "Content Slide White")
+layout_properties(template_presentation, layout = "Analytics_two_content_upper_text", master = "Content Slide White")
 
 #ggsave('review.png', plot)
 ```
