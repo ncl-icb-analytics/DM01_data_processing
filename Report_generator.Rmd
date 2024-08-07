@@ -38,8 +38,8 @@ data = read_csv('data/inter.csv')
 template_presentation <- read_pptx('input/template.pptx') 
 
 ```
-### Adding Column for week number
 
+### Adding Column for week number
 ```{r}
 
 # Calculate week number based on financial year starting in April
@@ -60,7 +60,6 @@ data <- data %>%
 
 
 ## Connecting to the Sandpit
-
 ```{r}
 
 con <- dbConnect(odbc::odbc(), 
@@ -101,7 +100,7 @@ dbDisconnect(con)
 
 Proposed structure is sub heading per slide, with one chunk per slide element
 
-### Title slide
+## Title slide
 
 ```{r}
 
@@ -112,12 +111,53 @@ Presentation <- template_presentation %>%
 ```
 
 
-## NCL Diagnostics - All Tests
+## SLIDE 1A: NCL Diagnostics - All Tests (text and table)
 
-### Diagnostics 6+ week wait charts
+### Summary text
+```{r}
+
+# Filter data to generate sentances
+waiting_list_sentance <- data %>% 
+  filter(Indicator == 'diagnostic_waiting_list',
+         Description == 'total', 
+         ) %>%
+  group_by(WeekNumber, Date) %>%
+  summarise(Activity = sum(Activity)) %>%
+  ungroup() %>% 
+  generate_lookup_table(.)%>%
+  generate_sentences(., 'total diagnostic waiting list')
+
+six_week_sentance <- data %>%
+  filter(Indicator %in% c('diagnostic_waiting_list', 'wait_list'), 
+         !str_detect(Description, 'tci')) %>%
+  mutate(
+    Length = case_when(
+      Description == 'total' ~ 'Over_Six',
+      str_detect(Description, 'weeks') ~ 'Under_Six'
+    )
+  ) %>%
+  group_by(WeekNumber, Date, Length) %>%
+  summarise(Activity = sum(Activity, na.rm=TRUE)) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = c(WeekNumber,Date), names_from = Length, values_from = Activity) %>%
+  mutate(Total = Over_Six + Under_Six,
+         Prop_over_six = round(Over_Six/Total*100,0)) %>%
+  rename(Activity = Over_Six) %>%
+  select(WeekNumber, Date, Activity)%>%
+  generate_lookup_table(.)%>%
+  generate_sentences(., 'total diagnostic waiting list')
 
 
-#### Actual and % waiting over 6 weeks
+Presentation <- Presentation %>%
+  add_slide(layout  = "Analytics_two_content_upper_text", master = "Content Slide White")  %>%
+  ph_with(value = paste0(sentences_list[[1]],'\n', six_week_sentance[[1]]), location = ph_location_label(ph_label = "Text Placeholder 6"))
+
+```
+
+
+## SLIDE 1B: NCL Diagnostics - All tests (Diagnostics 6+ week wait charts)
+
+### Image: Actual and % waiting over 6 weeks (left)
 ```{r}
 
 # Filter data
@@ -179,7 +219,7 @@ Presentation <- Presentation %>%
 ```
 
 
-#### 6+ week waits by Providers
+### Image: 6+ week waits by Providers (right)
 
 ```{r}
 # Filter data
@@ -213,14 +253,15 @@ Presentation <- Presentation%>%
 
 ```
 
-#### NCL All Tests Table
+## SLIDE 2A: Diagnostics - Activity (text and table)
 
+### Summary text
 
+### Table
 
+## SLIDE 2B: Diagnostics - Activity (plots)
 
-## Diagnostics - Activity
-
-### Weekly Scans by Source
+### Image (left): Weekly Scans by Source
 
 ```{r}
 # Filter data
@@ -262,7 +303,7 @@ Presentation <- Presentation %>%
 ```
 
 
-### Weekly Diagnostic Scans by Provider
+### Image (centre): Weekly Diagnostic Scans by Provider
 
 ```{r}
 # Filter data
@@ -301,7 +342,7 @@ Presentation <- Presentation%>%
   ph_with(value = plot, location = ph_location_label(ph_label = "Picture Placeholder 7"))
 ```
 
-### Weekly Diagnostic activity vs previous year
+### Image (right): Weekly Diagnostic activity vs previous year
 
 
 ```{r}
@@ -464,8 +505,9 @@ Presentation <- Presentation %>%
 ```
 
 
-## Six+ Week Wait Matrix
+## SLIDE 3: Six+ Week Wait Matrix
 
+### Table
 ```{r}
 
 # Filter data
@@ -488,9 +530,6 @@ pivot_table <- aggregated_data %>%
   summarise(Activity = sum(Activity), .groups = 'drop') %>%
   pivot_wider(names_from = Provider, values_from = Activity, values_fill = list(Activity = 0))
 
-
-
-
 pivot_table_with_totals <- pivot_table %>%
   rowwise() %>%
   mutate(Total = sum(c_across(starts_with("GOSH"):starts_with("WH")), na.rm = TRUE)) %>%
@@ -506,7 +545,7 @@ final_table <- pivot_table_with_totals %>%
   bind_rows(system_total) %>%
   relocate(Speciality, Total) 
 
-
+cell_finder <- function(x){cells_body(columns = !!sym(x), rows = !!sym(x) > 90)}
 
 gt_table <- final_table %>%
   gt() %>%
@@ -515,30 +554,11 @@ gt_table <- final_table %>%
     columns = c(GOSH, MEH, NMUH, RFL, RNOH, UCLH, WH, Total),
     decimals = 0
   ) %>%
-  # Apply red color to values above 90
-  tab_style(
-    style = cell_text(color = "red"),
-    locations = cells_body(
-      columns = c(GOSH, MEH, NMUH, RFL, RNOH, UCLH, WH),
-      rows = Speciality != "System Total" & (
-        GOSH > 90 |
-        MEH > 90 |
-        NMUH > 90 |
-        RFL > 90 |
-        RNOH > 90 |
-        UCLH > 90 |
-        WH > 90
-      )
-    )
-  ) %>% 
-  tab_style(
-    style = cell_fill(color = "#005EB8"),
-    locations = cells_column_labels(everything())) %>% 
-   tab_style(
-    style = cell_text(color = "white", weight = "bold"),
-    locations = cells_column_labels(everything()))
+  tab_style(style = list(cell_fill(color = "lightpink"), cell_text(weight = "bold", color = "red")),
+            locations = lapply(c("Total","GOSH","MEH","NMUH", "RFL","RNOH","UCLH","WH"), builder)) %>%
+  tab_spanner(label = "Samples", columns = c(Total,GOSH,MEH,NMUH, RFL,RNOH,UCLH,WH))
+  
 
-gt_table |> gtsave("gt_table.png", expand = 10)
 
 
 Presentation <- Presentation %>%
@@ -548,6 +568,9 @@ Presentation <- Presentation %>%
 
 ```
 
+## SLIDE 4: Other modalities overview
+
+# END OF MVP (NEXT SECTION IS IN REPEARS)
 
 ## Endoscopy
 
@@ -917,94 +940,8 @@ Presentation <- Presentation %>%
 
 ```{r}
 
-filtered_data2 <- data %>% 
-  filter(Speciality_Group == 'Imaging' , 
-         Description == 'total', 
-         Indicator == 'activity')
-
-# Parameter for report date
-report_date <- as.Date("2024-05-19")
-
-# Function to generate lookup table
-generate_lookup_table <- function(data, report_date) {
-  data <- data %>%
-    filter(Indicator == 'activity') %>%
-    group_by(Speciality_Group, Date) %>%
-    summarise(Total_Activity = sum(Activity), .groups = 'drop') %>%
-    ungroup()
-  
-  time_periods <- c(7, 42, 365)
-  
-  lookup_table <- data.frame()
-  
-  for (time_period in time_periods) {
-    past_date <- report_date - days(time_period)
-    
-    current_activity <- data %>%
-      filter(Date == report_date) %>%
-      select(Speciality_Group, Total_Activity) %>%
-      rename(Current_Activity = Total_Activity)
-    
-    past_activity <- data %>%
-      filter(Date == past_date) %>%
-      select(Speciality_Group, Total_Activity) %>%
-      rename(Past_Activity = Total_Activity)
-    
-    activity_comparison <- current_activity %>%
-      left_join(past_activity, by = "Speciality_Group") %>%
-      mutate(
-        Activity_Difference = Current_Activity - Past_Activity,
-        Percent_Difference = (Activity_Difference / Past_Activity) * 100,
-        Level = ifelse(Activity_Difference > 0, "increase", "decrease"),
-        Date = report_date,
-        Time_Period = paste(time_period, "days")
-      )
-    
-    lookup_table <- bind_rows(lookup_table, activity_comparison)
-  }
-  
-  lookup_table <- lookup_table %>%
-    select(Speciality_Group, Date, Time_Period, Activity_Difference, Percent_Difference, Level)
-  
-  return(lookup_table)
-}
-
-# Generate lookup table
-lookup_table <- generate_lookup_table(filtered_data2, report_date)
-print(lookup_table)
-
-
 
 ```
-
-### Generating Sentences
-```{r}
-
-generate_sentences <- function(lookup_table) {
-  sentences_list <- lookup_table %>%
-    rowwise() %>%
-    mutate(
-      Sentence = str_glue(
-        "For the week ending {format(Date, '%d/%m/%Y')}, the total activity {Level} by {format(abs(Activity_Difference), big.mark = ',')} ({sprintf('%.2f', abs(Percent_Difference))}%) over the last {Time_Period}."
-      )
-    ) %>%
-    pull(Sentence)
-  
-  return(sentences_list)
-}
-
-# Generate sentences
-sentences_list <- generate_sentences(lookup_table)
-print(sentences_list)
-
-Presentation <- Presentation %>%
-  add_slide(layout  = "Analytics_two_content_upper_text", master = "Content Slide White")  %>%
-  ph_with(value = sentences_list[[1]], location = ph_location_label(ph_label = "Text Placeholder 6"))
-
-
-```
-
-
 
 
 # Creating the Presentation as Output
