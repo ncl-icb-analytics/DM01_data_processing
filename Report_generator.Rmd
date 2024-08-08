@@ -1075,7 +1075,7 @@ gt_table |> gtsave("gt_table.png")
 Presentation <- Presentation %>%
   add_slide(layout = "mod_layout_1", master = "Content Slide White")  %>%
   ph_with(value = "Other Modalities", location = ph_location_type(type = "title")) %>% 
-  ph_with(external_img("gt_table.png"), location = ph_location_label(ph_label = "Picture Placeholder 7"))
+  ph_with(external_img("gt_table.png"), location = ph_location_label(ph_label = "Picture Placeholder 5"))
 ```
 
 
@@ -1199,7 +1199,7 @@ gt_table <- pivoted_table %>%
 gt_table |> gtsave("gt_table.png", expand = 10)
 
 Presentation <- Presentation %>%
-  ph_with(external_img("gt_table.png"), location = ph_location_label(ph_label = "Content Placeholder 9"))
+  ph_with(external_img("gt_table.png"), location = ph_location_label(ph_label = "Picture Placeholder 3"))
 
 
 
@@ -1579,17 +1579,6 @@ Presentation <- Presentation %>%
 
 
 
-# Imaging sentences 
-
-
-### Look-up Table for Sentence Generation
-
-```{r}
-
-
-```
-
-
 
 
 # Closing the Sandpit connection
@@ -1615,7 +1604,7 @@ print_placeholders <- function(layout_name, master_name){
 
 walk2(.x = layouts$layout, .y = layouts$master, ~print_placeholders(.x, .y))
 
-layout_properties(template_presentation, layout = "One Column", master = "Content Slide White")
+layout_properties(template_presentation, layout = "mod_layout_1", master = "Content Slide White")
 
 #ggsave('review.png', plot)
 ```
