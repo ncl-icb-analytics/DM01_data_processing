@@ -111,7 +111,11 @@ filter_plot_data <- function(data, provider = 'all', speciality_group = 'all', s
 }
 
 
-
+clean_column_names <- function(df) {
+  df %>%
+    rename_all(~ gsub("[- _]+", "_", .)) %>%  # Replace spaces, hyphens, or multiple underscores with a single underscore
+    rename_all(tolower)                       # Convert to lowercase
+}
 
 ## graphing code --- 
 

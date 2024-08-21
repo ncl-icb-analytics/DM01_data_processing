@@ -4,7 +4,7 @@ author: "Arush Mohan"
 date: "`r Sys.Date()`"
 output: html_document
 params:
-  report_date: 20240623
+  report_date: 20240811
   freeze_window: 7
 ---
 
@@ -116,58 +116,30 @@ combined_data <- file_list %>%
 
 ```{r}
 
+# Pivoting data to wide format
 wide_data <- combined_data %>%
   pivot_wider(
     names_from = Indicator,
     values_from = Activity
   )
 
+# Adding week number based on calendar year
 wide_data <- wide_data %>%
   mutate(
-    FiscalYearStart = make_date(year(ReportDate), 4, 1),
-    WeekNumber = if_else(
-      month(ReportDate) < 4,
-      week(ReportDate) - week(FiscalYearStart) + 53,
-      week(ReportDate) - week(FiscalYearStart) + 1
-    ),
-    WeekNumber = paste("Week", WeekNumber) 
-  ) %>%
-  select(-FiscalYearStart) 
+    WeekNumber = paste("Week", week(ReportDate))
+  )
+
 
 ```
 
 
 ## Processing for upload
 ```{r}
-#speciality_grouping <- read_csv('input/grouping.csv') # commented out, should be added in visualisation only
-
-combined_data<- combined_data %>%
-  separate_wider_delim(Indicator, '-', names = c('Indicator','Description'), too_few = 'align_start') %>% # split indicators
-  mutate(Description = replace_na(Description, 'None'))#%>% 
-  #left_join(speciality_grouping) # adding context # commented out, should be added in visualisation only
-```
-
-
-### Adding Column for week number
-
-```{r}
-
-
-# Calculate week number based on financial year starting in April
-combined_data <- combined_data %>%
-  mutate(
-    FiscalYearStart = make_date(year(ReportDate), 4, 1),
-    WeekNumber = if_else(
-      month(ReportDate) < 4,
-      week(ReportDate) - week(FiscalYearStart) + 53,
-      week(ReportDate) - week(FiscalYearStart) + 1
-    ),
-    WeekNumber = paste("Week", WeekNumber) 
-  ) %>%
-  select(-FiscalYearStart) 
-
+# Replace spaces, hyphens, or multiple underscores with a single underscore. Make all column names lowercase
+wide_data <- clean_column_names(wide_data)
 
 ```
+
 
 
 
@@ -177,7 +149,6 @@ combined_data <- combined_data %>%
 # Write combined dataset to a new Excel file
 write_xlsx(wide_data, paste0('output/', "wide_dataset_combined_", ymd(params$report_date), ".xlsx"))
 
-write_xlsx(combined_data, paste0('output/', "long_dataset_combined_", as.Date(params$report_date), ".xlsx"))
 
 ```
 
@@ -194,110 +165,6 @@ con <- dbConnect(odbc::odbc(),
                  TrustedConnection = TRUE)
 ```
 
-
-### Checking for duplicates and uploading to Sandpit - Long Data
-```{r}
-
-# Begin a transaction
-dbBegin(con)
-
-# Error handling 
-tryCatch({
-
-  # Separate the data into flex and freeze
-  flex_data <- combined_data %>% filter(DataType == "flex")
-  freeze_data <- combined_data %>% filter(DataType == "freeze")
-  
-  # Check for existing records 
-  if (nrow(freeze_data) > 0) {
-    unique_freeze_entries <- freeze_data %>%
-      select(provider_name, ReportDate) %>%
-      distinct()
-    
-    # SQL IN clause strings for freeze data
-    freeze_provider_names <- paste0("'", unique_freeze_entries$provider_name, "'", collapse = ", ")
-    freeze_report_dates <- paste0("'", unique_freeze_entries$ReportDate, "'", collapse = ", ")
-
-    # Query to check for existing freeze data
-    freeze_query <- sprintf(
-      "SELECT provider_name, ReportDate FROM [Data_Lab_NCL].[MohanA].[DashboardTest] 
-       WHERE DataType = 'freeze' AND provider_name IN (%s) AND ReportDate IN (%s)",
-      freeze_provider_names, freeze_report_dates
-    )
-    
-    existing_freeze_data <- dbGetQuery(con, freeze_query)
-    
-    # If existing freeze data is found raise an error
-    if (nrow(existing_freeze_data) > 0) {
-      stop(sprintf(
-        "Duplicate freeze data found for provider_name(s): %s on ReportDate(s): %s.",
-        paste(existing_freeze_data$provider_name, collapse = ", "),
-        paste(existing_freeze_data$ReportDate, collapse = ", ")
-      ))
-    }
-  }
-  
-  # Check for existing records in flex data
-  if (nrow(flex_data) > 0) {
-    unique_flex_entries <- flex_data %>%
-      select(provider_name, ReportDate) %>%
-      distinct()
-
-    # SQL IN clause strings for flex data
-    flex_provider_names <- paste0("'", unique_flex_entries$provider_name, "'", collapse = ", ")
-    flex_report_dates <- paste0("'", unique_flex_entries$ReportDate, "'", collapse = ", ")
-
-    # Query to check for existing flex data
-    flex_query <- sprintf(
-      "SELECT provider_name, ReportDate FROM [Data_Lab_NCL].[MohanA].[DashboardTest] 
-       WHERE DataType = 'flex' AND provider_name IN (%s) AND ReportDate IN (%s)",
-      flex_provider_names, flex_report_dates
-    )
-    
-    existing_flex_data <- dbGetQuery(con, flex_query)
-
-    # If existing flex data is found raise an error
-    if (nrow(existing_flex_data) > 0) {
-      stop(sprintf(
-        "Duplicate flex data found for provider_name(s): %s on ReportDate(s): %s.",
-        paste(existing_flex_data$provider_name, collapse = ", "),
-        paste(existing_flex_data$ReportDate, collapse = ", ")
-      ))
-    }
-  }
-
-  # Delete existing flex data 
-  if (nrow(freeze_data) > 0) {
-    delete_statement <- sprintf(
-      "DELETE FROM [Data_Lab_NCL].[MohanA].[DashboardTest] 
-       WHERE DataType = 'flex' 
-       AND provider_name IN (%s)
-       AND ReportDate IN (%s)",
-      freeze_provider_names, freeze_report_dates
-    )
-    dbExecute(con, delete_statement)
-  }
-
-  # Insert freeze data 
-  if (nrow(freeze_data) > 0) {
-    dbAppendTable(con, Id(schema = "MohanA", table = "DashboardTest"), freeze_data)
-  }
-
-  # Insert flex data 
-  if (nrow(flex_data) > 0) {
-    dbAppendTable(con, Id(schema = "MohanA", table = "DashboardTest"), flex_data)
-  }
-
-  # Commit the transaction
-  dbCommit(con)
-  
-}, error = function(e) {
-  # Rollback the transaction in case of error
-  dbRollback(con)
-  stop("Transaction failed: ", e$message)
-})
-
-```
 
 
 
@@ -328,7 +195,7 @@ tryCatch({
 
     # Query to check for existing freeze data
     freeze_query <- sprintf(
-      "SELECT provider_name, ReportDate FROM [Data_Lab_NCL].[diag_dashboard].[wide_data] 
+      "SELECT provider_name, ReportDate FROM [Data_Lab_NCL].[dbo].[diagnostics_combined_data] 
        WHERE DataType = 'freeze' AND provider_name IN (%s) AND ReportDate IN (%s)",
       freeze_provider_names, freeze_report_dates
     )
@@ -357,7 +224,7 @@ tryCatch({
 
     # Query to check for existing flex data
     flex_query <- sprintf(
-      "SELECT provider_name, ReportDate FROM [Data_Lab_NCL].[diag_dashboard].[wide_data] 
+      "SELECT provider_name, ReportDate FROM [Data_Lab_NCL].[dbo].[diagnostics_combined_data] 
        WHERE DataType = 'flex' AND provider_name IN (%s) AND ReportDate IN (%s)",
       flex_provider_names, flex_report_dates
     )
@@ -377,7 +244,7 @@ tryCatch({
   # Delete existing flex data
   if (nrow(wide_flex_data) > 0) {
     delete_statement <- sprintf(
-      "DELETE FROM [Data_Lab_NCL].[diag_dashboard].[wide_data] 
+      "DELETE FROM [Data_Lab_NCL].[dbo].[diagnostics_combined_data] 
        WHERE DataType = 'flex' 
        AND provider_name IN (%s)
        AND ReportDate IN (%s)",
