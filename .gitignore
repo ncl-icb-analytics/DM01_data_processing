@@ -180,4 +180,6 @@ cython_debug/
 ##Template for PPT 
 !input/template.pptx
 
+##Supporting Doc
+!docs/ingestion_using_R.docx
 
