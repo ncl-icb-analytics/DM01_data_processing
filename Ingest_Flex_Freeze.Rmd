@@ -4,7 +4,7 @@ author: "Arush Mohan"
 date: "`r Sys.Date()`"
 output: html_document
 params:
-  report_date: 20240811
+  report_date: 20240728
   freeze_window: 7
 ---
 
@@ -255,12 +255,12 @@ tryCatch({
 
   # Insert wide-format freeze data
   if (nrow(wide_freeze_data) > 0) {
-    dbAppendTable(con, Id(schema = "diag_dashboard", table = "wide_data"), wide_freeze_data)
+    dbAppendTable(con, Id(schema = "dbo", table = "diagnostics_combined_data"), wide_freeze_data)
   }
 
   # Insert wide-format flex data
   if (nrow(wide_flex_data) > 0) {
-    dbAppendTable(con, Id(schema = "diag_dashboard", table = "wide_data"), wide_flex_data)
+    dbAppendTable(con, Id(schema = "dbo", table = "diagnostics_combined_data"), wide_flex_data)
   }
 
   # Commit the transaction
