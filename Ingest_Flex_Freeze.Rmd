@@ -131,6 +131,8 @@ wide_data <- wide_data %>%
 
 wide_data$provider_name <- toupper(wide_data$provider_name) #capitalising all the provider names
 
+wide_data <- wide_data %>%
+  mutate(provider_name = ifelse(provider_name == "INHEALTH", "InHealth", provider_name))
 
 ```
 
