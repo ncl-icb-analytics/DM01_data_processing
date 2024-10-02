@@ -129,6 +129,8 @@ wide_data <- wide_data %>%
     WeekNumber = paste("Week", week(reportdate))
   )
 
+wide_data$provider_name <- toupper(wide_data$provider_name) #capitalising all the provider names
+
 
 ```
 
@@ -137,6 +139,20 @@ wide_data <- wide_data %>%
 ```{r}
 # Replace spaces, hyphens, or multiple underscores with a single underscore. Make all column names lowercase
 wide_data <- clean_column_names(wide_data)
+
+
+wide_data <- wide_data %>%
+  mutate(unscheduled = as.numeric(unscheduled))
+
+wide_data <- wide_data %>%
+  mutate(total_dna = as.numeric(total_dna))
+
+wide_data <- wide_data %>%
+  mutate(unscheduled = ifelse(is.na(unscheduled), "", unscheduled))
+
+wide_data <- wide_data %>%
+  mutate(total_dna = ifelse(is.na(total_dna), "", total_dna))
+
 
 ```
 
