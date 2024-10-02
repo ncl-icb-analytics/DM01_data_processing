@@ -4,7 +4,7 @@ author: "Arush Mohan"
 date: "`r Sys.Date()`"
 output: html_document
 params:
-  report_date: 20240728
+  report_date: 20240825
   freeze_window: 7
 ---
 
@@ -147,7 +147,7 @@ wide_data <- clean_column_names(wide_data)
 ```{r}
 
 # Write combined dataset to a new Excel file
-write_xlsx(wide_data, paste0('output/', "wide_dataset_combined_", ymd(params$report_date), ".xlsx"))
+write_csv(wide_data, paste0('output/', "wide_dataset_combined_", ymd(params$report_date), ".csv"))
 
 
 ```
