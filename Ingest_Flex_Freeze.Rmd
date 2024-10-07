@@ -4,7 +4,7 @@ author: "Arush Mohan"
 date: "`r Sys.Date()`"
 output: html_document
 params:
-  report_date: 20240825
+  report_date: 20240901
   freeze_window: 7
 ---
 
@@ -142,14 +142,6 @@ wide_data <- wide_data %>%
 # Replace spaces, hyphens, or multiple underscores with a single underscore. Make all column names lowercase
 wide_data <- clean_column_names(wide_data)
 
-
-wide_data <- wide_data %>%
-  mutate(across(c(total_dna, unscheduled, dna, patient_cancelled, `patient_declined/refused`), as.numeric))
-
-
-
-wide_data <- wide_data %>%
-  mutate(across(c(total_dna, unscheduled, dna, patient_cancelled, `patient_declined/refused`), ~ ifelse(is.na(.), "", .)))
 
 ```
 
