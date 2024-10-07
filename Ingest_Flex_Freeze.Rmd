@@ -144,17 +144,12 @@ wide_data <- clean_column_names(wide_data)
 
 
 wide_data <- wide_data %>%
-  mutate(unscheduled = as.numeric(unscheduled))
+  mutate(across(c(total_dna, unscheduled, dna, patient_cancelled, `patient_declined/refused`), as.numeric))
+
+
 
 wide_data <- wide_data %>%
-  mutate(total_dna = as.numeric(total_dna))
-
-wide_data <- wide_data %>%
-  mutate(unscheduled = ifelse(is.na(unscheduled), "", unscheduled))
-
-wide_data <- wide_data %>%
-  mutate(total_dna = ifelse(is.na(total_dna), "", total_dna))
-
+  mutate(across(c(total_dna, unscheduled, dna, patient_cancelled, `patient_declined/refused`), ~ ifelse(is.na(.), "", .)))
 
 ```
 
@@ -213,7 +208,7 @@ tryCatch({
 
     # Query to check for existing freeze data
     freeze_query <- sprintf(
-      "SELECT provider_name, reportdate FROM [Data_Lab_NCL].[dbo].[diagnostics_combined_data] 
+      "SELECT provider_name, reportdate FROM [Data_Lab_NCL].[dbo].[diagnostics_combined_data_2] 
        WHERE datatype = 'freeze' AND provider_name IN (%s) AND reportdate IN (%s)",
       freeze_provider_names, freeze_report_dates
     )
@@ -242,7 +237,7 @@ tryCatch({
 
     # Query to check for existing flex data
     flex_query <- sprintf(
-      "SELECT provider_name, reportdate FROM [Data_Lab_NCL].[dbo].[diagnostics_combined_data] 
+      "SELECT provider_name, reportdate FROM [Data_Lab_NCL].[dbo].[diagnostics_combined_data_2] 
        WHERE datatype = 'flex' AND provider_name IN (%s) AND reportdate IN (%s)",
       flex_provider_names, flex_report_dates
     )
@@ -262,7 +257,7 @@ tryCatch({
   # Delete existing flex data
   if (nrow(wide_flex_data) > 0) {
     delete_statement <- sprintf(
-      "DELETE FROM [Data_Lab_NCL].[dbo].[diagnostics_combined_data] 
+      "DELETE FROM [Data_Lab_NCL].[dbo].[diagnostics_combined_data_2] 
        WHERE datatype = 'flex' 
        AND provider_name IN (%s)
        AND reportdate IN (%s)",
@@ -273,12 +268,12 @@ tryCatch({
 
   # Insert wide-format freeze data
   if (nrow(wide_freeze_data) > 0) {
-    dbAppendTable(con, Id(schema = "dbo", table = "diagnostics_combined_data"), wide_freeze_data)
+    dbAppendTable(con, Id(schema = "dbo", table = "diagnostics_combined_data_2"), wide_freeze_data)
   }
 
   # Insert wide-format flex data
   if (nrow(wide_flex_data) > 0) {
-    dbAppendTable(con, Id(schema = "dbo", table = "diagnostics_combined_data"), wide_flex_data)
+    dbAppendTable(con, Id(schema = "dbo", table = "diagnostics_combined_data_2"), wide_flex_data)
   }
 
   # Commit the transaction
