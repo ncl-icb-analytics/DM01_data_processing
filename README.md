@@ -1,10 +1,12 @@
-# Dashboard Automation project folder
+# DM01 Data Processing Project
 
-This git repository contains code that aims to automate the ingestion, manipulation, and upload of data for a specific dashboard within the 
-Analytics Team.  The code can be used as a starting point for toher similar automation projects within the Analytics Team. It won't fit all circumstances perfectly, and you can make changes and issue a 
-pull request for new features / changes.
+The DM01 Data Processing Project is designed to automate the ingestion and uploading of data to the Sandpit as part of a reporting pipeline
 
+Data Files: Ensure that the necessary Excel data files are present in the data directory, organized by date into Flex and Freeze subdirectories.
+Database Access: Ensure that you have the necessary permissions and access to the SQL Server database. The script uses an ODBC connection, so you may need to configure your ODBC settings to connect to the database. 
+Input CSV Files: Ensure that the necessary input CSV files (Provider_indicator_list.csv, Provider_inconsistency_adjustment.csv, and Sheet_parameters.csv) are present in the 
 
+Detailed information can be found in the supporting documentation in the "docs" folder. 
 
 ## To use this template, please use the following practises:
 
